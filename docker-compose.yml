@@ -1,0 +1,28 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server
+    user: "101:101"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${CLICKHOUSE_TCP_PORT:-9000}:9000"
+    environment:
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+
+  mysql:
+    image: mysql:8
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  clickhouse_data:
+  mysql_data:

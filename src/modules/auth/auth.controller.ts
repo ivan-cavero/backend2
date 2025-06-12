@@ -1,0 +1,131 @@
+import type { Context } from 'hono'
+import { HTTPException } from 'hono/http-exception'
+import { deleteCookie, setCookie } from 'hono/cookie'
+import { CONFIG } from '@/config'
+import { logger } from '@/utils/logger'
+import { getGoogleOAuthUrl, getGoogleTokens, getGoogleUserProfile, createJwt } from './auth.service'
+import { findOrCreateUser } from '../user/user.service'
+
+const JWT_COOKIE_NAME = 'token'
+
+// Builds the frontend error redirect URL.
+const buildErrorRedirectUrl = (message: string): string => {
+	return `${CONFIG.FRONTEND_URL}/auth/error?message=${encodeURIComponent(message)}`
+}
+
+// Extracts a meaningful error message from various error types.
+const getErrorMessage = async (error: unknown): Promise<string> => {
+	if (error instanceof HTTPException) {
+		// For HTTPExceptions, try to get a more specific message from the response body.
+		if (error.getResponse().status !== 500) {
+			try {
+				const res = error.getResponse()
+				const jsonError = (await res.json()) as { message?: string }
+				if (jsonError?.message) {
+					return jsonError.message
+				}
+			} catch (_e) {
+				// Fallback to default message if parsing fails.
+			}
+		}
+		return error.message || 'Authentication service error.'
+	}
+	if (error instanceof Error) {
+		return error.message
+	}
+	if (typeof error === 'string') {
+		return error
+	}
+	return 'An unknown error occurred during Google sign-in.'
+}
+
+/**
+ * Redirects user to Google's OAuth consent screen.
+ */
+export const googleOAuthHandler = async (c: Context) => {
+	try {
+		const authUrl = getGoogleOAuthUrl()
+		return c.redirect(authUrl)
+	} catch (error) {
+		// This error usually indicates a server configuration issue (e.g., missing env vars).
+		logger.error('Critical: Could not generate Google OAuth URL.', error)
+		throw new HTTPException(500, {
+			message: 'Could not initiate Google login due to a server configuration error.'
+		})
+	}
+}
+
+/**
+ * Handles the Google OAuth callback after user consent.
+ * Exchanges the authorization code for tokens, gets user info, creates a JWT,
+ * and sets it in a secure cookie.
+ */
+export const googleOAuthCallbackHandler = async (c: Context) => {
+	const code = c.req.query('code')
+	const errorQuery = c.req.query('error')
+
+	// Handle explicit errors from Google (e.g., user denied access).
+	if (errorQuery) {
+		logger.warn('Google OAuth callback error:', { errorQuery })
+		return c.redirect(buildErrorRedirectUrl(errorQuery))
+	}
+
+	// The authorization code is required to proceed.
+	if (!code) {
+		logger.warn('Authorization code missing in Google OAuth callback.')
+		return c.redirect(buildErrorRedirectUrl('Authorization code is missing.'))
+	}
+
+	try {
+		const { access_token, id_token: _id_token, refresh_token: _refresh_token } = await getGoogleTokens(code)
+
+		if (!access_token) {
+			logger.error('No access_token received from Google after code exchange.')
+			throw new HTTPException(500, { message: 'Failed to retrieve access token from Google.' })
+		}
+
+		const googleUser = await getGoogleUserProfile(access_token)
+
+		// Find or create a user in our system corresponding to the Google user.
+		const appUser = await findOrCreateUser({
+			googleId: googleUser.id,
+			email: googleUser.email,
+			name: googleUser.name,
+			avatarUrl: googleUser.picture
+		})
+
+		const jwtPayloadData = {
+			id: appUser.id, // Use our internal user ID for the JWT subject.
+			email: appUser.email
+		}
+
+		const jwtToken = await createJwt(jwtPayloadData)
+
+		// Set the JWT in a secure, httpOnly cookie.
+		setCookie(c, JWT_COOKIE_NAME, jwtToken, {
+			httpOnly: true,
+			secure: CONFIG.NODE_ENV === 'production',
+			sameSite: 'Lax',
+			path: '/',
+			maxAge: 7 * 24 * 60 * 60 // 7 days
+			// domain: CONFIG.COOKIE_DOMAIN, // Set if sharing cookie across subdomains.
+		})
+
+		return c.redirect(CONFIG.FRONTEND_URL)
+	} catch (error: unknown) {
+		const errorMessage = await getErrorMessage(error)
+		logger.error('Error during Google OAuth callback:', { errorMessage, error })
+		return c.redirect(buildErrorRedirectUrl(errorMessage))
+	}
+}
+
+/**
+ * Logs the user out by clearing the session cookie and redirecting to the frontend.
+ */
+export const logoutHandler = async (c: Context) => {
+	deleteCookie(c, JWT_COOKIE_NAME, {
+		path: '/'
+		// domain: CONFIG.COOKIE_DOMAIN, // Ensure domain matches if it was set
+	})
+	return c.redirect(CONFIG.FRONTEND_URL)
+}
