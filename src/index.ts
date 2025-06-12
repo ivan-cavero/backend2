@@ -10,7 +10,7 @@ import { serveStatic } from 'hono/bun'
 import { logger } from '@/utils/logger'
 import { CONFIG } from '@/config'
 import authRoutes from './modules/auth/auth.routes'
-import { errorHandler, notFoundHandler } from './middleware/errorHandler'
+import { errorHandler, notFoundHandler } from './middlewares/errorHandler'
 
 const app = new Hono()
 

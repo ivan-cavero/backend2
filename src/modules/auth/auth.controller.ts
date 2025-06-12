@@ -1,5 +1,5 @@
 import type { Context } from 'hono'
-import { HTTPException } from '@/middleware/errorHandler'
+import { HTTPException } from '@/middlewares/errorHandler'
 import { deleteCookie, setCookie } from 'hono/cookie'
 import { CONFIG } from '@/config'
 import { logger } from '@/utils/logger'

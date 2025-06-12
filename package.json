@@ -26,13 +26,13 @@
         "test:coverage": "NODE_ENV=test bun test --coverage",
         "lint": "biome lint",
         "prepare": "husky",
-        "migrate:mysql": "bun run src/scripts/run-dbmate.ts mysql up",
-        "migrate:clickhouse": "bun run src/scripts/run-dbmate.ts clickhouse up",
-        "migrate:all": "bun run src/scripts/run-dbmate.ts all up",
-        "rollback:mysql": "bun run src/scripts/run-dbmate.ts mysql rollback",
-        "rollback:clickhouse": "bun run src/scripts/run-dbmate.ts clickhouse rollback",
-        "rollback:all": "bun run src/scripts/run-dbmate.ts all rollback",
-        "create-test-user": "bun run src/scripts/create-test-user.ts"
+        "migrate:mysql": "bun run scripts/run-dbmate.ts mysql up",
+        "migrate:clickhouse": "bun run scripts/run-dbmate.ts clickhouse up",
+        "migrate:all": "bun run scripts/run-dbmate.ts all up",
+        "rollback:mysql": "bun run scripts/run-dbmate.ts mysql rollback",
+        "rollback:clickhouse": "bun run scripts/run-dbmate.ts clickhouse rollback",
+        "rollback:all": "bun run scripts/run-dbmate.ts all rollback",
+        "create-test-user": "bun run scripts/create-test-user.ts"
     },
     "dependencies": {
         "@clickhouse/client": "1.11.2",
