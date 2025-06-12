@@ -45,14 +45,14 @@
         "resend": "4.5.2",
         "stripe": "18.2.1",
         "uuid": "11.1.0",
-        "zod": "3.25.57",
+        "zod": "3.25.63",
         "zod-openapi": "4.2.4"
     },
     "devDependencies": {
         "@biomejs/biome": "1.9.4",
         "@commitlint/cli": "19.8.1",
         "@commitlint/config-conventional": "19.8.1",
-        "@types/bun": "1.2.15",
+        "@types/bun": "1.2.16",
         "cross-env": "7.0.3",
         "dbmate": "2.27.0",
         "husky": "9.1.7"
