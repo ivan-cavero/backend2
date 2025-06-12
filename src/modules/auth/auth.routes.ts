@@ -73,7 +73,24 @@ authRoutes.get(
 			}
 		}
 	}),
-	zValidator('query', GoogleCallbackQuerySchema),
+	zValidator('query', GoogleCallbackQuerySchema, (result, c) => {
+		if (!result.success) {
+			return c.json(
+				{
+					ok: false,
+					error: {
+						message: 'Validation failed.',
+						status: 422,
+						issues: result.error.issues.map((issue) => ({
+							path: issue.path.join('.'),
+							message: issue.message,
+						})),
+					},
+				},
+				422
+			)
+		}
+	}),
 	googleOAuthCallbackHandler
 )
 

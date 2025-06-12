@@ -1,5 +1,5 @@
 import type { Context } from 'hono'
-import { HTTPException } from 'hono/http-exception'
+import { HTTPException } from '@/middleware/errorHandler'
 import { deleteCookie, setCookie } from 'hono/cookie'
 import { CONFIG } from '@/config'
 import { logger } from '@/utils/logger'
@@ -7,37 +7,6 @@ import { getGoogleOAuthUrl, getGoogleTokens, getGoogleUserProfile, createJwt } f
 import { findOrCreateUser } from '../user/user.service'
 
 const JWT_COOKIE_NAME = 'token'
-
-// Builds the frontend error redirect URL.
-const buildErrorRedirectUrl = (message: string): string => {
-	return `${CONFIG.FRONTEND_URL}/auth/error?message=${encodeURIComponent(message)}`
-}
-
-// Extracts a meaningful error message from various error types.
-const getErrorMessage = async (error: unknown): Promise<string> => {
-	if (error instanceof HTTPException) {
-		// For HTTPExceptions, try to get a more specific message from the response body.
-		if (error.getResponse().status !== 500) {
-			try {
-				const res = error.getResponse()
-				const jsonError = (await res.json()) as { message?: string }
-				if (jsonError?.message) {
-					return jsonError.message
-				}
-			} catch (_e) {
-				// Fallback to default message if parsing fails.
-			}
-		}
-		return error.message || 'Authentication service error.'
-	}
-	if (error instanceof Error) {
-		return error.message
-	}
-	if (typeof error === 'string') {
-		return error
-	}
-	return 'An unknown error occurred during Google sign-in.'
-}
 
 /**
  * Redirects user to Google's OAuth consent screen.
@@ -64,16 +33,14 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 	const code = c.req.query('code')
 	const errorQuery = c.req.query('error')
 
-	// Handle explicit errors from Google (e.g., user denied access).
 	if (errorQuery) {
 		logger.warn('Google OAuth callback error:', { errorQuery })
-		return c.redirect(buildErrorRedirectUrl(errorQuery))
+		throw new HTTPException(400, { message: `Google OAuth error: ${errorQuery}` })
 	}
 
-	// The authorization code is required to proceed.
 	if (!code) {
 		logger.warn('Authorization code missing in Google OAuth callback.')
-		return c.redirect(buildErrorRedirectUrl('Authorization code is missing.'))
+		throw new HTTPException(400, { message: 'Authorization code is missing.' })
 	}
 
 	try {
@@ -112,10 +79,15 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 		})
 
 		return c.redirect(CONFIG.FRONTEND_URL)
-	} catch (error: unknown) {
-		const errorMessage = await getErrorMessage(error)
-		logger.error('Error during Google OAuth callback:', { errorMessage, error })
-		return c.redirect(buildErrorRedirectUrl(errorMessage))
+	} catch (error) {
+		// Errors are now caught by the global error handler.
+		// We just need to re-throw them if they are not already HTTPExceptions.
+		if (error instanceof HTTPException) {
+			throw error
+		}
+		// For unexpected errors, log and throw a generic 500 error.
+		logger.error('Error during Google OAuth callback:', { error })
+		throw new HTTPException(500, { message: 'An unexpected error occurred during sign-in.' })
 	}
 }
 

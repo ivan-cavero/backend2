@@ -35,5 +35,5 @@ export const CONFIG: AppConfig = {
 	GOOGLE_CLIENT_ID: getEnv('GOOGLE_CLIENT_ID', '') as string,
 	GOOGLE_CLIENT_SECRET: getEnv('GOOGLE_CLIENT_SECRET', '') as string,
 	JWT_SECRET: getEnv('JWT_SECRET', 'default-secret-key-for-dev') as string,
-	FRONTEND_URL: getEnv('FRONTEND_URL', 'http://localhost:5173') as string // Will be undefined if not set, handled in index.ts
+	FRONTEND_URL: getEnv('FRONTEND_URL', 'http://localhost:5173') as string 
 }

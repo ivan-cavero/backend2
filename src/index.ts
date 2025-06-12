@@ -10,6 +10,7 @@ import { serveStatic } from 'hono/bun'
 import { logger } from '@/utils/logger'
 import { CONFIG } from '@/config'
 import authRoutes from './modules/auth/auth.routes'
+import { errorHandler, notFoundHandler } from './middleware/errorHandler'
 
 const app = new Hono()
 
@@ -49,6 +50,12 @@ app.use('/favicon.svg', serveStatic({ path: './static/favicon.svg' }))
 
 // Mount authentication routes
 app.route('/api/auth', authRoutes);
+
+// Error handler
+app.onError(errorHandler)
+
+// Custom Not Found handler
+app.notFound(notFoundHandler);
 
 // Health check endpoint
 app.get('/health', (c) => c.text('OK'))

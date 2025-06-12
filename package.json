@@ -37,7 +37,7 @@
     "dependencies": {
         "@clickhouse/client": "1.11.2",
         "@hono/oauth-providers": "0.8.1",
-        "@hono/zod-validator": "0.7.0",
+        "@hono/zod-validator": "^0.7.0",
         "@scalar/hono-api-reference": "0.9.3",
         "hono": "4.7.11",
         "hono-openapi": "0.4.8",
