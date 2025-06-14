@@ -1,165 +1,75 @@
-import type { User } from './user.types';
+import { mysqlPool } from '@/db/mysql'
+import type { User } from './user.types'
+import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise'
 
-// In-memory store to act as a mock database.
-const users: User[] = [];
-let nextId = 1;
-
-interface FindOrCreateUserParams {
-  googleId: string;
-  email: string;
-  name: string;
-  avatarUrl?: string;
+export async function getUserByUuid(uuid: string): Promise<User | null> {
+	const [rows] = await mysqlPool.query<RowDataPacket[]>('SELECT * FROM users WHERE uuid = ? AND deleted_at IS NULL', [uuid])
+	const user = rows[0]
+	return user ? mapDbUserToUser(user) : null
 }
 
-interface SoftDeleteOptions {
-  hardDelete?: boolean;
+export async function getUserByEmail(email: string): Promise<User | null> {
+	const [rows] = await mysqlPool.query<RowDataPacket[]>('SELECT * FROM users WHERE email = ? AND deleted_at IS NULL', [email])
+	const user = rows[0]
+	return user ? mapDbUserToUser(user) : null
 }
 
-/**
- * Finds a user by their Google ID or email. If not found, creates a new user.
- * This is a mock implementation using an in-memory array.
- * @param params - User data from Google profile.
- * @returns The found or newly created user.
- */
-export const findOrCreateUser = async (params: FindOrCreateUserParams): Promise<User> => {
-  const existingUser = users.find(
-    (user) => 
-      (user.googleId === params.googleId || user.email === params.email) && 
-      !user.deletedAt
-  );
+export async function listUsers(): Promise<User[]> {
+	const [rows] = await mysqlPool.query<RowDataPacket[]>('SELECT * FROM users WHERE deleted_at IS NULL')
+	return rows.map(mapDbUserToUser)
+}
 
-  if (existingUser) {
-    // Optional: Update user data if it has changed (e.g., name or avatar).
-    existingUser.name = params.name;
-    existingUser.avatarUrl = params.avatarUrl;
-    existingUser.updatedAt = new Date();
-    return existingUser;
-  }
+export async function createUser(data: Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>): Promise<User> {
+	await mysqlPool.query<ResultSetHeader>(
+		'INSERT INTO users (uuid, email, name, avatar_url) VALUES (?, ?, ?, ?)',
+		[data.uuid, data.email, data.name, data.avatarUrl]
+	)
+	return getUserByEmail(data.email) as Promise<User>
+}
 
-  // Create a new user if not found.
-  const newUser: User = {
-    id: nextId++,
-    uuid: Bun.randomUUIDv7(), // Usamos UUIDv7 de Bun que es más moderno y eficiente
-    googleId: params.googleId,
-    email: params.email,
-    name: params.name,
-    avatarUrl: params.avatarUrl,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+export async function updateUserByUuid(uuid: string, data: Partial<Omit<User, 'id' | 'uuid' | 'createdAt' | 'updatedAt' | 'deletedAt'>>): Promise<User | null> {
+	const fields = []
+	const values = []
+	if (data.email) { fields.push('email = ?'); values.push(data.email) }
+	if (data.name) { fields.push('name = ?'); values.push(data.name) }
+	if (data.avatarUrl) { fields.push('avatar_url = ?'); values.push(data.avatarUrl) }
+	if (fields.length === 0) { return getUserByUuid(uuid) }
+	values.push(uuid)
+	await mysqlPool.query<ResultSetHeader>(
+		`UPDATE users SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE uuid = ? AND deleted_at IS NULL`,
+		values
+	)
+	return getUserByUuid(uuid)
+}
 
-  users.push(newUser);
-  return newUser;
-};
+export async function softDeleteUserByUuid(uuid: string): Promise<boolean> {
+	const [result] = await mysqlPool.query<ResultSetHeader>(
+		'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE uuid = ? AND deleted_at IS NULL',
+		[uuid]
+	)
+	return result.affectedRows > 0
+}
 
-/**
- * Finds a user by their internal ID.
- * @param id - The internal ID of the user.
- * @returns The user if found, undefined otherwise.
- */
-export const findUserById = async (id: number): Promise<User | undefined> => {
-  return users.find(user => user.id === id && !user.deletedAt);
-};
+export async function upsertUserFromOAuth({ email, name, avatarUrl }: { googleId: string, email: string, name: string, avatarUrl?: string }): Promise<User> {
+	const user = await getUserByEmail(email)
+	if (user) {
+		await updateUserByUuid(user.uuid, { name, avatarUrl })
+		return getUserByUuid(user.uuid) as Promise<User>
+	}
+	const uuid = Bun.randomUUIDv7()
+	await createUser({ uuid, email, name, avatarUrl })
+	return getUserByEmail(email) as Promise<User>
+}
 
-/**
- * Finds a user by their UUID.
- * @param uuid - The UUID of the user.
- * @returns The user if found, undefined otherwise.
- */
-export const findUserByUuid = async (uuid: string): Promise<User | undefined> => {
-  return users.find(user => user.uuid === uuid && !user.deletedAt);
-};
-
-/**
- * Soft deletes a user by their internal ID.
- * @param id - The internal ID of the user.
- * @param options - Options for deletion.
- * @returns True if the user was deleted, false otherwise.
- */
-export const deleteUser = async (id: number, options: SoftDeleteOptions = {}): Promise<boolean> => {
-  const userIndex = users.findIndex(user => user.id === id && !user.deletedAt);
-  
-  if (userIndex === -1) {
-    return false;
-  }
-  
-  if (options.hardDelete) {
-    // Hard delete - remove from array
-    users.splice(userIndex, 1);
-  } else {
-    // Soft delete - mark as deleted
-    users[userIndex].deletedAt = new Date();
-  }
-  
-  return true;
-};
-
-/**
- * Soft deletes a user by their UUID.
- * @param uuid - The UUID of the user.
- * @param options - Options for deletion.
- * @returns True if the user was deleted, false otherwise.
- */
-export const deleteUserByUuid = async (uuid: string, options: SoftDeleteOptions = {}): Promise<boolean> => {
-  const userIndex = users.findIndex(user => user.uuid === uuid && !user.deletedAt);
-  
-  if (userIndex === -1) {
-    return false;
-  }
-  
-  if (options.hardDelete) {
-    // Hard delete - remove from array
-    users.splice(userIndex, 1);
-  } else {
-    // Soft delete - mark as deleted
-    users[userIndex].deletedAt = new Date();
-  }
-  
-  return true;
-};
-
-/**
- * Updates a user by their internal ID.
- * @param id - The internal ID of the user.
- * @param userData - The user data to update.
- * @returns The updated user if found, undefined otherwise.
- */
-export const updateUser = async (id: number, userData: Partial<User>): Promise<User | undefined> => {
-  const user = users.find(user => user.id === id && !user.deletedAt);
-  
-  if (!user) {
-    return undefined;
-  }
-  
-  // Update user properties
-  Object.assign(user, userData, { updatedAt: new Date() });
-  
-  return user;
-};
-
-/**
- * Updates a user by their UUID.
- * @param uuid - The UUID of the user.
- * @param userData - The user data to update.
- * @returns The updated user if found, undefined otherwise.
- */
-export const updateUserByUuid = async (uuid: string, userData: Partial<User>): Promise<User | undefined> => {
-  const user = users.find(user => user.uuid === uuid && !user.deletedAt);
-  
-  if (!user) {
-    return undefined;
-  }
-  
-  // Update user properties
-  Object.assign(user, userData, { updatedAt: new Date() });
-  
-  return user;
-};
-
-/**
- * Lists all active (non-deleted) users.
- * @returns Array of active users.
- */
-export const listUsers = async (): Promise<User[]> => {
-  return users.filter(user => !user.deletedAt);
-};
+function mapDbUserToUser(row: RowDataPacket): User {
+	return {
+		uuid: row.uuid,
+		googleId: undefined, // Not handled here
+		email: row.email,
+		name: row.name,
+		avatarUrl: row.avatar_url,
+		createdAt: row.created_at,
+		updatedAt: row.updated_at,
+		deletedAt: row.deleted_at || undefined
+	}
+}

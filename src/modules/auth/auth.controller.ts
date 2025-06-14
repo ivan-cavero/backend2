@@ -4,7 +4,7 @@ import { deleteCookie, setCookie } from 'hono/cookie'
 import { CONFIG } from '@/config'
 import { logger } from '@/utils/logger'
 import { getGoogleOAuthUrl, getGoogleTokens, getGoogleUserProfile, createJwt } from './auth.service'
-import { findOrCreateUser } from '../user/user.service'
+import { upsertUserFromOAuth } from '../user/user.service'
 
 const JWT_COOKIE_NAME = 'token'
 
@@ -44,7 +44,7 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 	}
 
 	try {
-		const { access_token, id_token: _id_token, refresh_token: _refresh_token } = await getGoogleTokens(code)
+		const { access_token } = await getGoogleTokens(code)
 
 		if (!access_token) {
 			logger.error('No access_token received from Google after code exchange.')
@@ -53,8 +53,8 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 
 		const googleUser = await getGoogleUserProfile(access_token)
 
-		// Find or create a user in our system corresponding to the Google user.
-		const appUser = await findOrCreateUser({
+		// Upsert user in our system corresponding to the Google user.
+		const appUser = await upsertUserFromOAuth({
 			googleId: googleUser.id,
 			email: googleUser.email,
 			name: googleUser.name,
@@ -62,7 +62,7 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 		})
 
 		const jwtPayloadData = {
-			id: appUser.id, // Use our internal user ID for the JWT subject.
+			id: appUser.uuid,
 			email: appUser.email
 		}
 

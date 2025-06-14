@@ -11,6 +11,7 @@ import { logger } from '@/utils/logger'
 import { CONFIG } from '@/config'
 import authRoutes from './modules/auth/auth.routes'
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler'
+import userRoutes from './modules/user/user.routes'
 
 const app = new Hono()
 
@@ -50,6 +51,9 @@ app.use('/favicon.svg', serveStatic({ path: './static/favicon.svg' }))
 
 // Mount authentication routes
 app.route('/api/auth', authRoutes);
+
+// Mount user routes
+app.route('/api/users', userRoutes)
 
 // Error handler
 app.onError(errorHandler)
@@ -102,6 +106,10 @@ app.get(
 				{
 					name: 'Auth',
 					description: 'Authentication endpoints for login, logout, and OAuth2 integration with Google.'
+				},
+				{
+					name: 'User',
+					description: 'User management endpoints: create, read, update, and soft delete users by UUID.'
 				}
 			]
 		}
