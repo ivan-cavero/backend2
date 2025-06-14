@@ -1,18 +1,7 @@
 import type { Context } from 'hono'
-
 import { HTTPException } from 'hono/http-exception'
 
-/**
- * Custom error handler to catch and format exceptions.
- * @param err The error caught by Hono.
- * @param c The Hono context.
- * @returns A formatted JSON error response.
- */
-/**
- * Custom Not Found handler to return a standardized JSON 404 error.
- * @param c The Hono context.
- * @returns A formatted JSON 404 error response.
- */
+// Custom Not Found handler to return a standardized JSON 404 error.
 export const notFoundHandler = (c: Context) => {
   return c.json(
     {
@@ -26,8 +15,8 @@ export const notFoundHandler = (c: Context) => {
   )
 }
 
+// Custom error handler to catch and format exceptions.
 export const errorHandler = (err: Error, c: Context) => {
-
   if (err instanceof HTTPException) {
     // Use the status and message from the HTTPException
     return c.json(
@@ -58,5 +47,5 @@ export const errorHandler = (err: Error, c: Context) => {
   )
 }
 
-// Re-export HTTPException for convenience, so it can be imported from this module
+// Re-export HTTPException for convenience
 export { HTTPException }

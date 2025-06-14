@@ -2,7 +2,9 @@ import { Hono } from 'hono'
 import { describeRoute } from 'hono-openapi'
 import { zValidator } from '@hono/zod-validator'
 import { googleOAuthHandler, googleOAuthCallbackHandler, logoutHandler } from './auth.controller'
-import { GoogleCallbackQuerySchema, ErrorSchema } from './auth.schemas'
+import { GoogleCallbackQuerySchema } from './auth.schemas'
+import { ErrorSchema } from '@/schemas/error.schema'
+import { resolver } from 'hono-openapi/zod'
 
 const authRoutes = new Hono()
 
@@ -17,10 +19,7 @@ authRoutes.get(
 				description: 'Redirect to Google OAuth2 consent screen.',
 				headers: {
 					Location: {
-						schema: {
-							type: 'string',
-							example: 'https://accounts.google.com/o/oauth2/v2/auth?...'
-						}
+						schema: { type: 'string', example: 'https://accounts.google.com/o/oauth2/v2/auth?...' }
 					}
 				}
 			}
@@ -34,22 +33,22 @@ authRoutes.get(
 	describeRoute({
 		summary: 'Handle Google OAuth2 Callback',
 		description:
-			'Handles the callback from Google after user authentication. It exchanges the authorization code for tokens, creates a user session by setting a secure `httpOnly` cookie, and redirects to the frontend application. On error, it redirects to a frontend error page with details in the query parameters.',
+			'Handles the callback from Google after user authentication. Exchanges the authorization code for tokens, creates a user session by setting a secure `httpOnly` cookie, and redirects to the frontend application. On error, redirects to a frontend error page with details in the query parameters.',
 		tags: ['Auth'],
 		parameters: [
 			{
 				in: 'query',
 				name: 'code',
 				required: true,
-				schema: { type: 'string' },
+				schema: resolver(GoogleCallbackQuerySchema.shape.code),
 				description: 'The authorization code provided by Google.'
 			},
 			{
 				in: 'query',
 				name: 'state',
 				required: false,
-				schema: { type: 'string' },
-				description: 'An optional state parameter for CSRF protection.'
+				schema: resolver(GoogleCallbackQuerySchema.shape.state),
+				description: 'Optional state parameter for CSRF protection.'
 			}
 		],
 		responses: {
@@ -58,16 +57,15 @@ authRoutes.get(
 					'Redirects to the frontend application (on success) or an error page (on failure). Sets the `token` cookie on success.',
 				headers: {
 					Location: {
-						schema: {
-							type: 'string',
-							example: 'http://localhost:3000/dashboard'
-						}
+						schema: { type: 'string', example: 'http://localhost:3000/dashboard' }
 					},
 					'Set-Cookie': {
-						schema: {
-							type: 'string',
-							example: 'token=...; Path=/; HttpOnly; Secure; SameSite=Lax'
-						}
+						schema: { type: 'string', example: 'token=...; Path=/; HttpOnly; Secure; SameSite=Lax' }
+					}
+				},
+				content: {
+					'application/json': {
+						schema: resolver(ErrorSchema)
 					}
 				}
 			}
@@ -105,16 +103,10 @@ authRoutes.get(
 				description: 'Redirects to the frontend login page after clearing the session.',
 				headers: {
 					Location: {
-						schema: {
-							type: 'string',
-							example: 'http://localhost:3000/login'
-						}
+						schema: { type: 'string', example: 'http://localhost:3000/login' }
 					},
 					'Set-Cookie': {
-						schema: {
-							type: 'string',
-							example: 'token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
-						}
+						schema: { type: 'string', example: 'token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT' }
 					}
 				}
 			}

@@ -68,7 +68,20 @@ app.get(
 			info: {
 				title: 'TimeFly API',
 				version: '1.0.0',
-				description: 'API for TimeFly'
+				description:
+					'TimeFly is a platform for developers to automatically and accurately track and analyze programming time.\n\n' +
+					'This API serves as the backend for our VS Code extension integration, allowing users to sign in with Google, manage sessions, and query productivity statistics.\n\n' +
+					'**Key Features:**\n' +
+					'- Direct integration with VS Code via extension\n' +
+					'- Secure authentication with Google OAuth2\n' +
+					'- User and session management\n' +
+					'- Well-documented and easy-to-consume API\n' +
+					'- Designed for teams and individual developers\n\n' +
+					'**Who is it for?**\n' +
+					'- Developers who want to understand and optimize their programming time\n' +
+					'- Teams seeking objective productivity metrics\n' +
+					'- Anyone interested in quantifying their workflow in the editor.\n\n' +
+					'Visit [timefly.dev](https://timefly.dev) for more information.'
 			},
 			servers: [{ url: `${CONFIG.BASE_URL}:${CONFIG.PORT}`, description: 'Server URL' }],
 			components: {
@@ -84,7 +97,13 @@ app.get(
 						name: 'X-API-Key'
 					}
 				}
-			}
+			},
+			tags: [
+				{
+					name: 'Auth',
+					description: 'Authentication endpoints for login, logout, and OAuth2 integration with Google.'
+				}
+			]
 		}
 	})
 )
