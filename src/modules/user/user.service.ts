@@ -1,30 +1,98 @@
 import { mysqlPool } from '@/db/mysql'
-import type { User } from './user.types'
+import type { User, ProviderIdentity } from './user.types'
 import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise'
 
 export async function getUserByUuid(uuid: string): Promise<User | null> {
-	const [rows] = await mysqlPool.query<RowDataPacket[]>('SELECT * FROM users WHERE uuid = ? AND deleted_at IS NULL', [uuid])
+	const [rows] = await mysqlPool.query<RowDataPacket[]>(`
+		SELECT u.*, 
+		       GROUP_CONCAT(
+		           JSON_OBJECT(
+		               'provider', p.name,
+		               'providerUserId', i.provider_user_id
+		           )
+		       ) as provider_identities
+		FROM users u
+		LEFT JOIN identities i ON u.id = i.user_id AND i.deleted_at IS NULL
+		LEFT JOIN providers p ON i.provider_id = p.id
+		WHERE u.uuid = ? AND u.deleted_at IS NULL
+		GROUP BY u.id
+	`, [uuid])
 	const user = rows[0]
 	return user ? mapDbUserToUser(user) : null
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
-	const [rows] = await mysqlPool.query<RowDataPacket[]>('SELECT * FROM users WHERE email = ? AND deleted_at IS NULL', [email])
+	const [rows] = await mysqlPool.query<RowDataPacket[]>(`
+		SELECT u.*, 
+		       GROUP_CONCAT(
+		           JSON_OBJECT(
+		               'provider', p.name,
+		               'providerUserId', i.provider_user_id
+		           )
+		       ) as provider_identities
+		FROM users u
+		LEFT JOIN identities i ON u.id = i.user_id AND i.deleted_at IS NULL
+		LEFT JOIN providers p ON i.provider_id = p.id
+		WHERE u.email = ? AND u.deleted_at IS NULL
+		GROUP BY u.id
+	`, [email])
 	const user = rows[0]
 	return user ? mapDbUserToUser(user) : null
 }
 
 export async function listUsers(): Promise<User[]> {
-	const [rows] = await mysqlPool.query<RowDataPacket[]>('SELECT * FROM users WHERE deleted_at IS NULL')
+	const [rows] = await mysqlPool.query<RowDataPacket[]>(`
+		SELECT u.*, 
+		       GROUP_CONCAT(
+		           JSON_OBJECT(
+		               'provider', p.name,
+		               'providerUserId', i.provider_user_id
+		           )
+		       ) as provider_identities
+		FROM users u
+		LEFT JOIN identities i ON u.id = i.user_id AND i.deleted_at IS NULL
+		LEFT JOIN providers p ON i.provider_id = p.id
+		WHERE u.deleted_at IS NULL
+		GROUP BY u.id
+	`)
 	return rows.map(mapDbUserToUser)
 }
 
 export async function createUser(data: Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>): Promise<User> {
-	await mysqlPool.query<ResultSetHeader>(
-		'INSERT INTO users (uuid, email, name, avatar_url) VALUES (?, ?, ?, ?)',
-		[data.uuid, data.email, data.name, data.avatarUrl]
-	)
-	return getUserByEmail(data.email) as Promise<User>
+	const connection = await mysqlPool.getConnection()
+	try {
+		await connection.beginTransaction()
+
+		// Create user
+		const [result] = await connection.query<ResultSetHeader>(
+			'INSERT INTO users (uuid, email, name, avatar_url) VALUES (?, ?, ?, ?)',
+			[data.uuid, data.email, data.name, data.avatarUrl]
+		)
+
+		// If provider identities are provided, create them
+		if (data.providerIdentities?.length) {
+			for (const identity of data.providerIdentities) {
+				const [providerResult] = await connection.query<RowDataPacket[]>(
+					'SELECT id FROM providers WHERE name = ? AND deleted_at IS NULL',
+					[identity.provider]
+				)
+				if (providerResult.length > 0) {
+					await connection.query(
+						'INSERT INTO identities (uuid, user_id, provider_id, provider_user_id) VALUES (?, ?, ?, ?)',
+						[Bun.randomUUIDv7(), result.insertId, providerResult[0].id, identity.providerUserId]
+					)
+				}
+			}
+		}
+
+		await connection.commit()
+		return getUserByEmail(data.email) as Promise<User>
+	} catch (error) {
+		await connection.rollback()
+		throw error
+	} finally {
+		connection.release()
+	}
 }
 
 export async function updateUserByUuid(uuid: string, data: Partial<Omit<User, 'id' | 'uuid' | 'createdAt' | 'updatedAt' | 'deletedAt'>>): Promise<User | null> {
@@ -50,26 +118,45 @@ export async function softDeleteUserByUuid(uuid: string): Promise<boolean> {
 	return result.affectedRows > 0
 }
 
-export async function upsertUserFromOAuth({ email, name, avatarUrl }: { googleId: string, email: string, name: string, avatarUrl?: string }): Promise<User> {
+export async function upsertUserFromOAuth({ provider, providerUserId, email, name, avatarUrl }: { 
+	provider: string, 
+	providerUserId: string, 
+	email: string, 
+	name: string, 
+	avatarUrl?: string 
+}): Promise<User> {
 	const user = await getUserByEmail(email)
 	if (user) {
 		await updateUserByUuid(user.uuid, { name, avatarUrl })
 		return getUserByUuid(user.uuid) as Promise<User>
 	}
 	const uuid = Bun.randomUUIDv7()
-	await createUser({ uuid, email, name, avatarUrl })
+	await createUser({ 
+		uuid, 
+		email, 
+		name, 
+		avatarUrl,
+		providerIdentities: [{
+			provider,
+			providerUserId
+		}]
+	})
 	return getUserByEmail(email) as Promise<User>
 }
 
 function mapDbUserToUser(row: RowDataPacket): User {
+	const providerIdentities = row.provider_identities 
+		? JSON.parse(`[${row.provider_identities}]`)
+		: undefined
+
 	return {
 		uuid: row.uuid,
-		googleId: row.google_id,
 		email: row.email,
 		name: row.name,
 		avatarUrl: row.avatar_url,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
-		deletedAt: row.deleted_at || undefined
+		deletedAt: row.deleted_at || undefined,
+		providerIdentities
 	}
 }

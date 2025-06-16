@@ -26,10 +26,10 @@ CREATE TABLE users (
     name VARCHAR(255),
     avatar_url TEXT,
     email_verified BOOLEAN DEFAULT FALSE,
+    api_key VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL,
-    api_key VARCHAR(255),
     UNIQUE KEY unique_uuid_not_deleted (uuid, (CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END)),
     UNIQUE KEY unique_email_not_deleted (email, (CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END)),
     UNIQUE KEY unique_api_key_not_deleted (api_key, (CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END))

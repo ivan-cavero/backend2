@@ -55,7 +55,8 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 
 		// Upsert user in our system corresponding to the Google user.
 		const appUser = await upsertUserFromOAuth({
-			googleId: googleUser.id,
+			provider: 'google',
+			providerUserId: googleUser.id,
 			email: googleUser.email,
 			name: googleUser.name,
 			avatarUrl: googleUser.picture
