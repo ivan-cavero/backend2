@@ -1,91 +1,67 @@
 import { CONFIG } from '@/config'
-import type { GoogleUser, JwtPayload } from './auth.types' // Use 'import type'
+import type { JwtPayload } from './auth.types'
 import { sign } from 'hono/jwt'
-import { logger } from '@/utils/logger'
-
-const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
-const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
-
-/**
- * Builds the Google OAuth2 authorization URL.
- * @returns The full URL for the Google authentication redirect.
- */
-export const getGoogleOAuthUrl = (): string => {
-	const params = new URLSearchParams({
-		client_id: CONFIG.GOOGLE_CLIENT_ID,
-		redirect_uri: `${CONFIG.BASE_URL}:${CONFIG.PORT}/api/auth/google/callback`,
-		response_type: 'code',
-		scope: 'openid email profile',
-		access_type: 'offline', // Request a refresh token.
-		prompt: 'consent' // Force consent screen to ensure refresh token is granted.
-	})
-	return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
-}
-
-/**
- * Exchanges an authorization code for Google access, ID, and refresh tokens.
- * @param code The authorization code from the Google callback.
- * @returns A promise resolving to the token object.
- * @throws Throws an error if the request to Google fails.
- */
-export const getGoogleTokens = async (code: string): Promise<{ access_token: string; id_token: string; refresh_token?: string }> => {
-	const params = new URLSearchParams({
-		code,
-		client_id: CONFIG.GOOGLE_CLIENT_ID,
-		client_secret: CONFIG.GOOGLE_CLIENT_SECRET,
-		redirect_uri: `${CONFIG.BASE_URL}:${CONFIG.PORT}/api/auth/google/callback`,
-		grant_type: 'authorization_code'
-	})
-
-	const response = await fetch(GOOGLE_TOKEN_URL, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-		body: params.toString()
-	})
-
-	if (!response.ok) {
-		const errorBody = await response.text()
-		logger.error('Failed to fetch Google tokens:', errorBody)
-		throw new Error('Failed to fetch Google tokens')
-	}
-	return response.json() as Promise<{ access_token: string; id_token: string; refresh_token?: string }>
-}
-
-/**
- * Fetches the Google user's profile using an access token.
- * @param accessToken The access token from Google.
- * @returns A promise resolving to the `GoogleUser` profile object.
- * @throws Throws an error if the request to Google fails.
- */
-export const getGoogleUserProfile = async (accessToken: string): Promise<GoogleUser> => {
-	const response = await fetch(GOOGLE_USERINFO_URL, {
-		headers: { Authorization: `Bearer ${accessToken}` }
-	})
-
-	if (!response.ok) {
-		const errorBody = await response.text()
-		logger.error('Failed to fetch Google user profile:', errorBody)
-		throw new Error('Failed to fetch Google user profile')
-	}
-	return response.json() as Promise<GoogleUser>
-}
+import { setCookie } from 'hono/cookie'
+import type { Context } from 'hono'
+import type { User } from '../user/user.types'
+import { createRefreshToken } from './refreshToken.service'
+import { getClientIp } from '@/utils/ip'
 
 /**
  * Creates a JSON Web Token (JWT) for the application session.
  * @param user An object containing the user's UUID and email.
+ * @param expiresInSeconds Expiration time in seconds (default: 15 min)
  * @returns A promise resolving to the signed JWT string.
  */
-export const createJwt = async (user: { id: string; email: string }): Promise<string> => {
-	const sevenDaysInSeconds = 7 * 24 * 60 * 60
-	const expirationTime = Math.floor(Date.now() / 1000) + sevenDaysInSeconds
-
+export const createJwt = async (
+	user: { id: string; email: string },
+	expiresInSeconds: number = 15 * 60
+): Promise<string> => {
+	const now = Math.floor(Date.now() / 1000)
 	const payload: JwtPayload = {
 		sub: user.id, // Subject (user UUID)
 		email: user.email,
 		iss: 'TimeFlyAPI', // Issuer
-		iat: Math.floor(Date.now() / 1000), // Issued at
-		exp: expirationTime // Expiration time
+		iat: now, // Issued at
+		exp: now + expiresInSeconds // Expiration time
 	}
-
 	return sign(payload, CONFIG.JWT_SECRET)
+}
+
+/**
+ * Generates a secure random refresh token string.
+ */
+export function generateRefreshToken(): string {
+	const arr = new Uint8Array(32)
+	globalThis.crypto.getRandomValues(arr)
+	const hex = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('')
+	return Bun.randomUUIDv7() + hex
+}
+
+/**
+ * Issues both access and refresh tokens as httpOnly cookies for a user.
+ * Used by all login flows (Google, email, GitHub, etc).
+ */
+export async function issueAuthTokens(c: Context, user: User) {
+	if (!user.id) { throw new Error('User must have internal id') }
+	const jwtToken = await createJwt({ id: user.uuid, email: user.email }, 15 * 60)
+	const refreshToken = await createRefreshToken({
+		userId: user.id,
+		userAgent: c.req.header('user-agent'),
+		ipAddress: getClientIp(c)
+	})
+	setCookie(c, 'token', jwtToken, {
+		httpOnly: true,
+		secure: process.env.NODE_ENV === 'production',
+		sameSite: 'Lax',
+		path: '/',
+		maxAge: 15 * 60 // 15 min
+	})
+	setCookie(c, 'refresh_token', refreshToken.token, {
+		httpOnly: true,
+		secure: process.env.NODE_ENV === 'production',
+		sameSite: 'Lax',
+		path: '/',
+		maxAge: 30 * 24 * 60 * 60 // 30 días
+	})
 }

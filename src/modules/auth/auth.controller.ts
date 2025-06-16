@@ -1,12 +1,16 @@
 import type { Context } from 'hono'
 import { HTTPException } from '@/middlewares/errorHandler'
-import { deleteCookie, setCookie } from 'hono/cookie'
+import { setCookie, getCookie } from 'hono/cookie'
 import { CONFIG } from '@/config'
 import { logger } from '@/utils/logger'
-import { getGoogleOAuthUrl, getGoogleTokens, getGoogleUserProfile, createJwt } from './auth.service'
+import { getGoogleOAuthUrl, getGoogleTokens, getGoogleUserProfile } from './providers/google'
+import { issueAuthTokens } from './auth.service'
 import { upsertUserFromOAuth } from '../user/user.service'
+import { findRefreshToken, revokeRefreshToken } from './refreshToken.service'
+import { getUserByEmail, getUserById } from '../user/user.service'
 
 const JWT_COOKIE_NAME = 'token'
+const REFRESH_TOKEN_COOKIE = 'refresh_token'
 
 /**
  * Redirects user to Google's OAuth consent screen.
@@ -45,14 +49,11 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 
 	try {
 		const { access_token } = await getGoogleTokens(code)
-
 		if (!access_token) {
 			logger.error('No access_token received from Google after code exchange.')
 			throw new HTTPException(500, { message: 'Failed to retrieve access token from Google.' })
 		}
-
 		const googleUser = await getGoogleUserProfile(access_token)
-
 		// Upsert user in our system corresponding to the Google user.
 		const appUser = await upsertUserFromOAuth({
 			provider: 'google',
@@ -61,24 +62,12 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 			name: googleUser.name,
 			avatarUrl: googleUser.picture
 		})
-
-		const jwtPayloadData = {
-			id: appUser.uuid,
-			email: appUser.email
+		// Get user with internal ID
+		const user = await getUserByEmail(appUser.email)
+		if (!user || !user.id) {
+			throw new HTTPException(500, { message: 'User not found or missing internal ID' })
 		}
-
-		const jwtToken = await createJwt(jwtPayloadData)
-
-		// Set the JWT in a secure, httpOnly cookie.
-		setCookie(c, JWT_COOKIE_NAME, jwtToken, {
-			httpOnly: true,
-			secure: CONFIG.NODE_ENV === 'production',
-			sameSite: 'Lax',
-			path: '/',
-			maxAge: 7 * 24 * 60 * 60 // 7 days
-			// domain: CONFIG.COOKIE_DOMAIN, // Set if sharing cookie across subdomains.
-		})
-
+		await issueAuthTokens(c, user)
 		return c.redirect(CONFIG.FRONTEND_URL)
 	} catch (error) {
 		// Errors are now caught by the global error handler.
@@ -92,13 +81,49 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 	}
 }
 
+export const refreshTokenHandler = async (c: Context) => {
+	const refreshToken = getCookie(c, REFRESH_TOKEN_COOKIE)
+	if (!refreshToken) {
+		throw new HTTPException(401, { message: 'No refresh token provided' })
+	}
+	const dbToken = await findRefreshToken(refreshToken)
+	if (!dbToken || dbToken.revokedAt || new Date(dbToken.expiresAt) < new Date()) {
+		throw new HTTPException(401, { message: 'Invalid or expired refresh token' })
+	}
+	// Get user
+	const user = await getUserById(dbToken.userId)
+	if (!user) {
+		throw new HTTPException(401, { message: 'User not found for refresh token' })
+	}
+	// Rotate refresh token
+	await revokeRefreshToken(refreshToken)
+	await issueAuthTokens(c, user)
+	return c.json({ ok: true })
+}
+
 /**
  * Logs the user out by clearing the session cookie and redirecting to the frontend.
  */
 export const logoutHandler = async (c: Context) => {
-	deleteCookie(c, JWT_COOKIE_NAME, {
-		path: '/'
-		// domain: CONFIG.COOKIE_DOMAIN, // Ensure domain matches if it was set
+	// Revoke only the current refresh token
+	const refreshToken = getCookie(c, REFRESH_TOKEN_COOKIE)
+	if (refreshToken) {
+		await revokeRefreshToken(refreshToken)
+	}
+	// Clear cookies
+	setCookie(c, JWT_COOKIE_NAME, '', {
+		httpOnly: true,
+		secure: CONFIG.NODE_ENV === 'production',
+		sameSite: 'Lax',
+		path: '/',
+		maxAge: 0
 	})
-	return c.redirect(CONFIG.FRONTEND_URL)
+	setCookie(c, REFRESH_TOKEN_COOKIE, '', {
+		httpOnly: true,
+		secure: CONFIG.NODE_ENV === 'production',
+		sameSite: 'Lax',
+		path: '/',
+		maxAge: 0
+	})
+	return c.json({ ok: true })
 }

@@ -55,7 +55,26 @@ CREATE TABLE identities (
     UNIQUE KEY unique_provider_user_not_deleted (provider_id, provider_user_id, (CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END))
 );
 
+-- Refresh table for multiple sessions per user (max 5)
+CREATE TABLE refresh_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL,
+    user_id INT NOT NULL,
+    token VARCHAR(255) NOT NULL,
+    user_agent VARCHAR(255),
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP NULL,
+    last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_token_not_deleted (token, (CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END)),
+    INDEX idx_user_id (user_id)
+);
+
 -- migrate:down
+DROP TABLE refresh_tokens;
 DROP TABLE identities;
 DROP TABLE users;
 DROP TABLE providers;

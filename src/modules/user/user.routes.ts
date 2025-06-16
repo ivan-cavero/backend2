@@ -11,8 +11,34 @@ import {
 } from './user.controller'
 import { UserSchema, UserCreateSchema, UserUpdateSchema } from './user.schema'
 import { ErrorSchema } from '@/schemas/error.schema'
+import { authMiddleware } from '@/middlewares/auth.middleware'
+import * as userService from './user.service'
 
 const userRoutes = new Hono()
+
+// Apply authentication middleware to all user routes
+userRoutes.use('*', authMiddleware)
+
+userRoutes.get(
+  '/me',
+  describeRoute({
+    tags: ['User'],
+    summary: 'Get current authenticated user',
+    responses: {
+      200: { description: 'Authenticated user', content: { 'application/json': { schema: resolver(UserSchema) } } },
+      401: { description: 'Unauthorized', content: { 'application/json': { schema: resolver(ErrorSchema) } } }
+    }
+  }),
+  async (c) => {
+    // userUuid is set by the authMiddleware
+    // Type workaround for Hono context variable
+    const uuid = c.get('userUuid' as unknown as keyof typeof c.var)
+    if (!uuid) { return c.json({ ok: false, error: { message: 'Unauthorized', status: 401 } }, 401) }
+    const user = await userService.getUserByUuid(uuid)
+    if (!user) { return c.json({ ok: false, error: { message: 'User not found', status: 404 } }, 404) }
+    return c.json(userService.toPublicUser(user))
+  }
+)
 
 userRoutes.get(
   '/',

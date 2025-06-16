@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { describeRoute } from 'hono-openapi'
 import { zValidator } from '@hono/zod-validator'
-import { googleOAuthHandler, googleOAuthCallbackHandler, logoutHandler } from './auth.controller'
+import { googleOAuthHandler, googleOAuthCallbackHandler, logoutHandler, refreshTokenHandler } from './auth.controller'
 import { GoogleCallbackQuerySchema } from './auth.schemas'
 import { ErrorSchema } from '@/schemas/error.schema'
 import { resolver } from 'hono-openapi/zod'
@@ -113,6 +113,34 @@ authRoutes.get(
 		}
 	}),
 	logoutHandler
+)
+
+authRoutes.post(
+	'/refresh',
+	describeRoute({
+		summary: 'Refresh access token using a valid refresh token cookie',
+		description: 'Issues a new access token and refresh token if the provided refresh token is valid. Returns both as httpOnly cookies.',
+		tags: ['Auth'],
+		responses: {
+			200: {
+				description: 'Tokens refreshed successfully',
+				content: {
+					'application/json': {
+						schema: { type: 'object', properties: { ok: { type: 'boolean', example: true } } }
+					}
+				}
+			},
+			401: {
+				description: 'Invalid or expired refresh token',
+				content: {
+					'application/json': {
+						schema: { type: 'object', properties: { ok: { type: 'boolean', example: false }, message: { type: 'string' } } }
+					}
+				}
+			}
+		}
+	}),
+	refreshTokenHandler
 )
 
 export default authRoutes

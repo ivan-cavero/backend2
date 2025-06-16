@@ -144,12 +144,32 @@ export async function upsertUserFromOAuth({ provider, providerUserId, email, nam
 	return getUserByEmail(email) as Promise<User>
 }
 
+export async function getUserById(id: number): Promise<User | null> {
+	const [rows] = await mysqlPool.query<RowDataPacket[]>(`
+		SELECT u.*, 
+		       GROUP_CONCAT(
+		           JSON_OBJECT(
+		               'provider', p.name,
+		               'providerUserId', i.provider_user_id
+		           )
+		       ) as provider_identities
+		FROM users u
+		LEFT JOIN identities i ON u.id = i.user_id AND i.deleted_at IS NULL
+		LEFT JOIN providers p ON i.provider_id = p.id
+		WHERE u.id = ? AND u.deleted_at IS NULL
+		GROUP BY u.id
+	`, [id])
+	const user = rows[0]
+	return user ? mapDbUserToUser(user) : null
+}
+
 function mapDbUserToUser(row: RowDataPacket): User {
 	const providerIdentities = row.provider_identities 
 		? JSON.parse(`[${row.provider_identities}]`)
 		: undefined
 
 	return {
+		id: row.id,
 		uuid: row.uuid,
 		email: row.email,
 		name: row.name,
@@ -159,4 +179,20 @@ function mapDbUserToUser(row: RowDataPacket): User {
 		deletedAt: row.deleted_at || undefined,
 		providerIdentities
 	}
+}
+
+/**
+ * Removes the internal numeric id from a User object before sending to the frontend.
+ */
+export function toPublicUser(user: User): Omit<User, 'id'> {
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	const { id, ...publicUser } = user
+	return publicUser
+}
+
+/**
+ * Maps an array of User objects to their public representation.
+ */
+export function toPublicUserArray(users: User[]): Omit<User, 'id'>[] {
+	return users.map(toPublicUser)
 }
