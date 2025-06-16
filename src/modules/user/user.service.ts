@@ -64,7 +64,7 @@ export async function upsertUserFromOAuth({ email, name, avatarUrl }: { googleId
 function mapDbUserToUser(row: RowDataPacket): User {
 	return {
 		uuid: row.uuid,
-		googleId: undefined, // Not handled here
+		googleId: row.google_id,
 		email: row.email,
 		name: row.name,
 		avatarUrl: row.avatar_url,

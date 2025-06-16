@@ -72,7 +72,7 @@ export const getGoogleUserProfile = async (accessToken: string): Promise<GoogleU
 
 /**
  * Creates a JSON Web Token (JWT) for the application session.
- * @param user An object containing the user's ID and email.
+ * @param user An object containing the user's UUID and email.
  * @returns A promise resolving to the signed JWT string.
  */
 export const createJwt = async (user: { id: string; email: string }): Promise<string> => {
@@ -80,7 +80,7 @@ export const createJwt = async (user: { id: string; email: string }): Promise<st
 	const expirationTime = Math.floor(Date.now() / 1000) + sevenDaysInSeconds
 
 	const payload: JwtPayload = {
-		sub: user.id, // Subject (user identifier)
+		sub: user.id, // Subject (user UUID)
 		email: user.email,
 		iss: 'TimeFlyAPI', // Issuer
 		iat: Math.floor(Date.now() / 1000), // Issued at

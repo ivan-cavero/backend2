@@ -10,10 +10,11 @@ export interface GoogleUser {
 }
 
 export interface JwtPayload {
-	sub: string // Subject (user ID)
+	sub: string // Subject (user UUID, not internal ID)
 	email: string
 	exp?: number // Expiration time (Unix timestamp)
-	// Add any other claims you want in your JWT
+	iss?: string // Issuer
+	iat?: number // Issued at
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	[key: string]: any // Index signature for compatibility
 }
