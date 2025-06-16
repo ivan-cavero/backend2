@@ -34,14 +34,14 @@
         "@hono/oauth-providers": "0.8.1",
         "@hono/zod-openapi": "0.19.8",
         "@hono/zod-validator": "0.7.0",
-        "@scalar/hono-api-reference": "0.9.3",
+        "@scalar/hono-api-reference": "0.9.4",
         "hono": "4.7.11",
         "hono-openapi": "0.4.8",
         "mysql2": "3.14.1",
-        "resend": "4.5.2",
+        "resend": "4.6.0",
         "stripe": "18.2.1",
         "uuid": "11.1.0",
-        "zod": "3.25.63"
+        "zod": "3.25.64"
     },
     "devDependencies": {
         "@biomejs/biome": "1.9.4",
