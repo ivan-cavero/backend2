@@ -25,7 +25,7 @@ app.use(
 )
 
 // CORS Configuration
-const defaultAllowedOrigins = ['http://localhost:5173']
+const defaultAllowedOrigins = ['http://localhost:3000']
 const configuredOrigins = CONFIG.ALLOWED_ORIGINS ? CONFIG.ALLOWED_ORIGINS.split(',') : defaultAllowedOrigins
 
 app.use(

@@ -11,6 +11,21 @@ export interface ServerConfig {
 	readonly GOOGLE_CLIENT_SECRET: string;
 	readonly JWT_SECRET: string;
 	readonly FRONTEND_URL: string;
+
+	// MySQL Configuration
+	readonly MYSQL_HOST: string;
+	readonly MYSQL_PORT: number;
+	readonly MYSQL_USER: string;
+	readonly MYSQL_PASSWORD: string;
+	readonly MYSQL_DATABASE: string;
+
+	// ClickHouse Configuration
+	readonly CLICKHOUSE_HOST: string;
+	readonly CLICKHOUSE_TCP_PORT: number;
+	readonly CLICKHOUSE_HTTP_PORT: number;
+	readonly CLICKHOUSE_USER: string;
+	readonly CLICKHOUSE_PASSWORD: string;
+	readonly CLICKHOUSE_DATABASE: string;
 }
 
 /**

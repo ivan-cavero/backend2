@@ -27,6 +27,7 @@ const getEnvNumber = (key: string, defaultValue: number): number => {
  * Application configuration
  */
 export const CONFIG: AppConfig = {
+	// Server Configuration
 	NODE_ENV: getEnv('NODE_ENV', 'development') as 'development' | 'production' | 'test',
 	PORT: getEnvNumber('PORT', 3000),
 	BASE_URL: getEnv('BASE_URL', 'http://localhost') as string,
@@ -35,5 +36,20 @@ export const CONFIG: AppConfig = {
 	GOOGLE_CLIENT_ID: getEnv('GOOGLE_CLIENT_ID', '') as string,
 	GOOGLE_CLIENT_SECRET: getEnv('GOOGLE_CLIENT_SECRET', '') as string,
 	JWT_SECRET: getEnv('JWT_SECRET', 'default-secret-key-for-dev') as string,
-	FRONTEND_URL: getEnv('FRONTEND_URL', 'http://localhost:5173') as string 
+	FRONTEND_URL: getEnv('FRONTEND_URL', 'http://localhost:5173') as string,
+
+	// MySQL Configuration
+	MYSQL_HOST: getEnv('MYSQL_HOST', 'localhost') as string,
+	MYSQL_PORT: getEnvNumber('MYSQL_PORT', 3306),
+	MYSQL_USER: getEnv('MYSQL_USER', 'root') as string,
+	MYSQL_PASSWORD: getEnv('MYSQL_PASSWORD', '') as string,
+	MYSQL_DATABASE: getEnv('MYSQL_DATABASE', 'timefly') as string,
+
+	// ClickHouse Configuration
+	CLICKHOUSE_HOST: getEnv('CLICKHOUSE_HOST', 'http://localhost') as string,
+	CLICKHOUSE_TCP_PORT: getEnvNumber('CLICKHOUSE_TCP_PORT', 9000),
+	CLICKHOUSE_HTTP_PORT: getEnvNumber('CLICKHOUSE_HTTP_PORT', 8123),
+	CLICKHOUSE_USER: getEnv('CLICKHOUSE_USER', 'default') as string,
+	CLICKHOUSE_PASSWORD: getEnv('CLICKHOUSE_PASSWORD', '') as string,
+	CLICKHOUSE_DATABASE: getEnv('CLICKHOUSE_DATABASE', 'default') as string
 }
