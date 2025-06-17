@@ -186,7 +186,7 @@ function mapDbUserToUser(row: RowDataPacket): User {
  */
 export function toPublicUser(user: User): Omit<User, 'id'> {
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	const { id, ...publicUser } = user
+	const { id: _id, ...publicUser } = user
 	return publicUser
 }
 

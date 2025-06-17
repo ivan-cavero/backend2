@@ -21,7 +21,7 @@ export interface JwtPayload {
 	exp?: number // Expiration time (Unix timestamp)
 	iss?: string // Issuer
 	iat?: number // Issued at
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+	// biome-ignore lint/suspicious/noExplicitAny: false positive
 	[key: string]: any // Index signature for compatibility
 }
 
