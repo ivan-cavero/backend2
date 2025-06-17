@@ -14,6 +14,7 @@ import { ErrorSchema } from '@/schemas/error.schema'
 import { authMiddleware } from '@/middlewares/auth.middleware'
 import * as userService from './user.service'
 import sessionRoutes from './sessions/session.routes'
+import apiKeyRoutes from './api-keys/apiKey.routes'
 
 const userRoutes = new Hono()
 
@@ -188,5 +189,6 @@ userRoutes.delete(
 )
 
 userRoutes.route('/:uuid/sessions', sessionRoutes)
+userRoutes.route('/:uuid/api-keys', apiKeyRoutes)
 
 export default userRoutes 

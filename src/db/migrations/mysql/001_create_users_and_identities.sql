@@ -73,7 +73,25 @@ CREATE TABLE refresh_tokens (
     INDEX idx_user_id (user_id)
 );
 
+-- API Keys table for user programmatic access
+CREATE TABLE api_keys (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL,
+    user_id INT NOT NULL,
+    api_key_hash VARCHAR(255) NOT NULL,
+    label VARCHAR(100),
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMP NULL,
+    deleted_at TIMESTAMP NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_uuid_not_deleted (uuid, (CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END)),
+    INDEX idx_user_id (user_id)
+);
+
 -- migrate:down
+DROP TABLE api_keys;
 DROP TABLE refresh_tokens;
 DROP TABLE identities;
 DROP TABLE users;
