@@ -151,6 +151,20 @@ app.get(
 	})
 )
 
+// Temporary debug endpoint (REMOVE IN PRODUCTION LATER)
+app.get('/debug/config', (c) => {
+	return c.json({
+		NODE_ENV: CONFIG.NODE_ENV,
+		BASE_URL: CONFIG.BASE_URL,
+		PORT: CONFIG.PORT,
+		google_redirect_uri_dev: `${CONFIG.BASE_URL}:${CONFIG.PORT}/api/auth/google/callback`,
+		google_redirect_uri_prod: `${CONFIG.BASE_URL}/api/auth/google/callback`,
+		will_use: CONFIG.NODE_ENV === 'production' 
+			? `${CONFIG.BASE_URL}/api/auth/google/callback`
+			: `${CONFIG.BASE_URL}:${CONFIG.PORT}/api/auth/google/callback`
+	})
+})
+
 logger.info(`API Documentation available at ${CONFIG.BASE_URL}:${CONFIG.PORT}`)
 
 export default {
