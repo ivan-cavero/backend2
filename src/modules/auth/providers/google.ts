@@ -6,9 +6,15 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo'
 
 export const getGoogleOAuthUrl = (): string => {
+  // In production, BASE_URL already includes protocol (https://api-v2.timefly.dev)
+  // In development, we need to add the port
+  const redirectUri = CONFIG.NODE_ENV === 'production' 
+    ? `${CONFIG.BASE_URL}/api/auth/google/callback`
+    : `${CONFIG.BASE_URL}:${CONFIG.PORT}/api/auth/google/callback`
+    
   const params = new URLSearchParams({
     client_id: CONFIG.GOOGLE_CLIENT_ID,
-    redirect_uri: `${CONFIG.BASE_URL}:${CONFIG.PORT}/api/auth/google/callback`,
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'openid email profile',
     access_type: 'offline',
@@ -18,11 +24,16 @@ export const getGoogleOAuthUrl = (): string => {
 }
 
 export const getGoogleTokens = async (code: string): Promise<{ access_token: string; id_token: string; refresh_token?: string }> => {
+  // Use same redirect URI logic as in getGoogleOAuthUrl
+  const redirectUri = CONFIG.NODE_ENV === 'production' 
+    ? `${CONFIG.BASE_URL}/api/auth/google/callback`
+    : `${CONFIG.BASE_URL}:${CONFIG.PORT}/api/auth/google/callback`
+    
   const params = new URLSearchParams({
     code,
     client_id: CONFIG.GOOGLE_CLIENT_ID,
     client_secret: CONFIG.GOOGLE_CLIENT_SECRET,
-    redirect_uri: `${CONFIG.BASE_URL}:${CONFIG.PORT}/api/auth/google/callback`,
+    redirect_uri: redirectUri,
     grant_type: 'authorization_code'
   })
   const response = await fetch(GOOGLE_TOKEN_URL, {
