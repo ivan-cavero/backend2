@@ -5,7 +5,7 @@ import { ApiKeyPublicSchema } from './apiKey.schema'
 import {
   listUserApiKeysHandler,
   listUserActiveApiKeysHandler,
-  listUserRevokedApiKeysHandler,
+
   getUserApiKeyByIdHandler,
   createUserApiKeyHandler,
   revokeUserApiKeyHandler,
@@ -44,19 +44,7 @@ apiKeyRoutes.get(
   listUserActiveApiKeysHandler
 )
 
-apiKeyRoutes.get(
-  '/revoked',
-  describeRoute({
-    tags: ['User API Keys'],
-    summary: 'List revoked API keys for a user',
-    description: 'Returns only revoked API keys for the user.',
-    responses: {
-      200: { description: 'List of revoked API keys', content: { 'application/json': { schema: resolver(ApiKeyPublicSchema.array()) } } },
-      401: { description: 'Unauthorized', content: { 'application/json': { schema: resolver(ErrorSchema) } } }
-    }
-  }),
-  listUserRevokedApiKeysHandler
-)
+
 
 apiKeyRoutes.get(
   '/:keyUuid',
@@ -81,7 +69,7 @@ apiKeyRoutes.post(
   describeRoute({
     tags: ['User API Keys'],
     summary: 'Create a new API key for a user',
-    description: 'Creates a new API key for the user. The real API key value is only shown once in the response. If you lose it, you must regenerate a new one.',
+    description: 'Creates a new API key for the user. Use this key with the X-API-Key header for IDE extensions and integrations. The real API key value is only shown once in the response. If you lose it, you must regenerate a new one.',
     requestBody: {
       content: { 'application/json': { schema: { type: 'object', properties: { label: { type: 'string', example: 'My App Key' }, description: { type: 'string', example: 'Key for syncing with my app' } } } } }
     },
@@ -144,7 +132,7 @@ apiKeyRoutes.post(
   describeRoute({
     tags: ['User API Keys'],
     summary: 'Regenerate an API key',
-    description: 'Revokes the old API key and creates a new one with the same label and description. The real API key value is only shown once in the response. If you lose it, you must regenerate a new one.',
+    description: 'Revokes the old API key and creates a new one with the same label and description. Use this key with the X-API-Key header for IDE extensions and integrations. The real API key value is only shown once in the response. If you lose it, you must regenerate a new one.',
     parameters: [
       { in: 'path', name: 'keyUuid', required: true, schema: { type: 'string', format: 'uuid' }, description: 'API Key UUID' }
     ],

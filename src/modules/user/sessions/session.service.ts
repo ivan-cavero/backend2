@@ -1,8 +1,31 @@
-import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
-import { mysqlPool } from '@/db/mysql'
+/**
+ * Session service for managing user refresh tokens in PostgreSQL
+ * 
+ * This service uses Bun's native SQL API with tagged template literals
+ * for safe query execution and automatic SQL injection protection.
+ */
+
+import { postgresDb } from '@/db/postgresql'
 import type { UserSession, UserSessionPublic } from './session.types'
 
-function mapDbSessionToUserSession(row: RowDataPacket): UserSession {
+/**
+ * Database row interface for session queries
+ */
+interface SessionDbRow {
+  id: number
+  uuid: string
+  user_id: number
+  token: string
+  user_agent?: string
+  ip_address?: string
+  created_at: Date
+  expires_at: Date
+  revoked_at?: Date | null
+  last_used_at: Date
+  deleted_at?: Date | null
+}
+
+function mapDbSessionToUserSession(row: SessionDbRow): UserSession {
   return {
     id: row.id,
     uuid: row.uuid,
@@ -19,78 +42,83 @@ function mapDbSessionToUserSession(row: RowDataPacket): UserSession {
 }
 
 function toPublicSession(session: UserSession): UserSessionPublic {
-  // Elimina id, token y userId
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id: _id, token: _token, userId: _userId, ...rest } = session;
-  return rest;
+  const { id: _id, token: _token, userId: _userId, ...publicData } = session
+  return publicData
 }
 
-export async function listUserSessions(userUuid: string): Promise<UserSessionPublic[]> {
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    `SELECT s.* FROM refresh_tokens s
-     JOIN users u ON s.user_id = u.id
-     WHERE u.uuid = ? AND s.deleted_at IS NULL
-     ORDER BY s.created_at DESC`,
-    [userUuid]
-  )
-  return rows.map(mapDbSessionToUserSession).map(toPublicSession);
+/**
+ * Get all user sessions (refresh tokens) for a user by UUID
+ */
+export async function getUserSessions(userUuid: string): Promise<UserSessionPublic[]> {
+  const rows = await postgresDb`
+    SELECT s.* FROM refresh_tokens s
+    JOIN users u ON s.user_id = u.id
+    WHERE u.uuid = ${userUuid} AND s.deleted_at IS NULL
+    ORDER BY s.created_at DESC
+  ` as SessionDbRow[]
+  return rows.map((row) => toPublicSession(mapDbSessionToUserSession(row)))
 }
 
-export async function listUserActiveSessions(userUuid: string): Promise<UserSessionPublic[]> {
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    `SELECT s.* FROM refresh_tokens s
-     JOIN users u ON s.user_id = u.id
-     WHERE u.uuid = ? AND s.revoked_at IS NULL AND s.deleted_at IS NULL AND s.expires_at > NOW()
-     ORDER BY s.created_at DESC`,
-    [userUuid]
-  )
-  return rows.map(mapDbSessionToUserSession).map(toPublicSession);
+/**
+ * Get all active (non-revoked) user sessions for a user by UUID
+ */
+export async function getActiveUserSessions(userUuid: string): Promise<UserSessionPublic[]> {
+  const rows = await postgresDb`
+    SELECT s.* FROM refresh_tokens s
+    JOIN users u ON s.user_id = u.id
+    WHERE u.uuid = ${userUuid} AND s.revoked_at IS NULL AND s.deleted_at IS NULL
+    ORDER BY s.created_at DESC
+  ` as SessionDbRow[]
+  return rows.map((row) => toPublicSession(mapDbSessionToUserSession(row)))
 }
 
-export async function listUserRevokedSessions(userUuid: string): Promise<UserSessionPublic[]> {
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    `SELECT s.* FROM refresh_tokens s
-     JOIN users u ON s.user_id = u.id
-     WHERE u.uuid = ? AND s.revoked_at IS NOT NULL AND s.deleted_at IS NULL
-     ORDER BY s.revoked_at DESC`,
-    [userUuid]
-  )
-  return rows.map(mapDbSessionToUserSession).map(toPublicSession);
-}
-
+/**
+ * Get session by user UUID and session UUID
+ */
 export async function getUserSessionById(userUuid: string, sessionId: string): Promise<UserSessionPublic | null> {
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    `SELECT s.* FROM refresh_tokens s
-     JOIN users u ON s.user_id = u.id
-     WHERE u.uuid = ? AND s.uuid = ? AND s.deleted_at IS NULL
-     LIMIT 1`,
-    [userUuid, sessionId]
-  )
-  const row = rows[0];
+  const rows = await postgresDb`
+    SELECT s.* FROM refresh_tokens s
+    JOIN users u ON s.user_id = u.id
+    WHERE u.uuid = ${userUuid} AND s.uuid = ${sessionId} AND s.deleted_at IS NULL
+    LIMIT 1
+  ` as SessionDbRow[]
+  const row = rows[0]
   if (!row) {
-    return null;
+    return null
   }
-  return toPublicSession(mapDbSessionToUserSession(row));
+  return toPublicSession(mapDbSessionToUserSession(row))
 }
 
+/**
+ * Revoke a specific user session by user UUID and session UUID
+ */
 export async function revokeUserSession(userUuid: string, sessionId: string): Promise<boolean> {
-  const [result] = await mysqlPool.query<ResultSetHeader>(
-    `UPDATE refresh_tokens s
-     JOIN users u ON s.user_id = u.id
-     SET s.revoked_at = NOW()
-     WHERE u.uuid = ? AND s.uuid = ? AND s.revoked_at IS NULL AND s.deleted_at IS NULL`,
-    [userUuid, sessionId]
-  )
-  return result.affectedRows > 0
+  const result = await postgresDb`
+    UPDATE refresh_tokens s
+    SET revoked_at = CURRENT_TIMESTAMP
+    FROM users u
+    WHERE s.user_id = u.id 
+    AND u.uuid = ${userUuid} 
+    AND s.uuid = ${sessionId} 
+    AND s.revoked_at IS NULL 
+    AND s.deleted_at IS NULL
+  `
+  return result.count > 0
 }
 
+/**
+ * Revoke all user sessions by user UUID
+ */
 export async function revokeAllUserSessions(userUuid: string): Promise<number> {
-  const [result] = await mysqlPool.query<ResultSetHeader>(
-    `UPDATE refresh_tokens s
-     JOIN users u ON s.user_id = u.id
-     SET s.revoked_at = NOW()
-     WHERE u.uuid = ? AND s.revoked_at IS NULL AND s.deleted_at IS NULL`,
-    [userUuid]
-  )
-  return result.affectedRows
+  const result = await postgresDb`
+    UPDATE refresh_tokens s
+    SET revoked_at = CURRENT_TIMESTAMP
+    FROM users u
+    WHERE s.user_id = u.id 
+    AND u.uuid = ${userUuid} 
+    AND s.revoked_at IS NULL 
+    AND s.deleted_at IS NULL
+  `
+  return result.count
 } 

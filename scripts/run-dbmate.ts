@@ -1,6 +1,6 @@
 import { spawn } from 'bun';
 
-type DbType = 'mysql' | 'clickhouse';
+type DbType = 'postgresql' | 'clickhouse';
 type Command = 'up' | 'rollback';
 
 interface DbConfig {
@@ -11,16 +11,16 @@ interface DbConfig {
 }
 
 const DB_CONFIGS: Record<DbType, DbConfig> = {
-  mysql: {
-    dbNameForLog: 'MySQL',
-    migrationsDir: 'src/db/migrations/mysql',
-    requiredEnvVars: ['MYSQL_USER', 'MYSQL_PASSWORD', 'MYSQL_HOST', 'MYSQL_PORT', 'MYSQL_DATABASE'],
+  postgresql: {
+    dbNameForLog: 'PostgreSQL',
+    migrationsDir: 'src/db/migrations/postgresql',
+    requiredEnvVars: ['POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_HOST', 'POSTGRES_PORT', 'POSTGRES_DATABASE'],
     getDbUrl: () => {
-      const { MYSQL_USER, MYSQL_PASSWORD, MYSQL_HOST, MYSQL_PORT, MYSQL_DATABASE } = process.env;
-      if (!MYSQL_USER || !MYSQL_PASSWORD || !MYSQL_HOST || !MYSQL_PORT || !MYSQL_DATABASE) {
+      const { POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DATABASE } = process.env;
+      if (!POSTGRES_USER || !POSTGRES_PASSWORD || !POSTGRES_HOST || !POSTGRES_PORT || !POSTGRES_DATABASE) {
         return null;
       }
-      return `mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}`;
+      return `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}?sslmode=disable`;
     },
   },
   clickhouse: {
@@ -89,7 +89,7 @@ async function runDbMate() {
 
   if (!dbTypeArg || !commandArg) {
     // Corrected path based on user's file structure
-    console.error('Usage: bun scripts/run-dbmate.ts <mysql|clickhouse|all> <up|rollback>');
+    console.error('Usage: bun scripts/run-dbmate.ts <postgresql|clickhouse|all> <up|rollback>');
     process.exit(1);
   }
 
@@ -100,11 +100,11 @@ async function runDbMate() {
 
   const dbTypesToProcess: DbType[] = [];
   if (dbTypeArg === 'all') {
-    dbTypesToProcess.push('mysql', 'clickhouse');
-  } else if (dbTypeArg === 'mysql' || dbTypeArg === 'clickhouse') {
+    dbTypesToProcess.push('postgresql', 'clickhouse');
+  } else if (dbTypeArg === 'postgresql' || dbTypeArg === 'clickhouse') {
     dbTypesToProcess.push(dbTypeArg);
   } else {
-    console.error(`Unsupported DB type: ${dbTypeArg}. Must be 'mysql', 'clickhouse', or 'all'.`);
+    console.error(`Unsupported DB type: ${dbTypeArg}. Must be 'postgresql', 'clickhouse', or 'all'.`);
     process.exit(1);
   }
 

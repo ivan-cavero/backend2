@@ -12,6 +12,7 @@ import { CONFIG } from '@/config'
 import authRoutes from './modules/auth/auth.routes'
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler'
 import userRoutes from './modules/user/user.routes'
+import syncRoutes from './modules/sync/sync.routes'
 
 const app = new Hono()
 
@@ -41,7 +42,7 @@ app.use(
 		},
 		credentials: true,
 		allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-		allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+		allowHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-API-Key'],
 		exposeHeaders: ['Content-Length']
 	})
 )
@@ -54,6 +55,9 @@ app.route('/api/auth', authRoutes);
 
 // Mount user routes
 app.route('/api/users', userRoutes)
+
+// Mount sync routes
+app.route('/api/sync', syncRoutes)
 
 // Error handler
 app.onError(errorHandler)
@@ -75,8 +79,13 @@ app.get(
 				description:
 					'TimeFly is a platform for developers to automatically and accurately track and analyze programming time.\n\n' +
 					'This API serves as the backend for our VS Code extension integration, allowing users to sign in with Google, manage sessions, and query productivity statistics.\n\n' +
+					'**Authentication:**\n' +
+					'- Web users authenticate via secure cookie (token) after Google login.\n' +
+					'- IDE extensions and integrations authenticate using an API key via the X-API-Key header.\n\n' +
 					'**Key Features:**\n' +
 					'- Direct integration with VS Code via extension\n' +
+					'- Real-time activity tracking and synchronization\n' +
+					'- High-performance time-series analytics with ClickHouse\n' +
 					'- Secure authentication with Google OAuth2\n' +
 					'- User and session management\n' +
 					'- Well-documented and easy-to-consume API\n' +
@@ -90,15 +99,11 @@ app.get(
 			servers: [{ url: `${CONFIG.BASE_URL}:${CONFIG.PORT}`, description: 'Server URL' }],
 			components: {
 				securitySchemes: {
-					bearerAuth: {
-						type: 'http',
-						scheme: 'bearer',
-						bearerFormat: 'JWT'
-					},
-					apiKeyAuth: {
+					apiKey: {
 						type: 'apiKey',
 						in: 'header',
-						name: 'X-API-Key'
+						name: 'X-API-Key',
+						description: 'Use X-API-Key: <api_key> for IDE extensions and integrations'
 					}
 				}
 			},
@@ -110,6 +115,10 @@ app.get(
 				{
 					name: 'User',
 					description: 'User management endpoints: create, read, update, and soft delete users by UUID.'
+				},
+				{
+					name: 'Activity Sync',
+					description: 'Core endpoints for synchronizing developer activity data from IDE extensions. Handles high-volume time-series data storage in ClickHouse.'
 				}
 			]
 		}

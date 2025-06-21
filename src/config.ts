@@ -38,12 +38,12 @@ export const CONFIG: AppConfig = {
 	JWT_SECRET: getEnv('JWT_SECRET', 'default-secret-key-for-dev') as string,
 	FRONTEND_URL: getEnv('FRONTEND_URL', 'http://localhost:5173') as string,
 
-	// MySQL Configuration
-	MYSQL_HOST: getEnv('MYSQL_HOST', 'localhost') as string,
-	MYSQL_PORT: getEnvNumber('MYSQL_PORT', 3306),
-	MYSQL_USER: getEnv('MYSQL_USER', 'root') as string,
-	MYSQL_PASSWORD: getEnv('MYSQL_PASSWORD', '') as string,
-	MYSQL_DATABASE: getEnv('MYSQL_DATABASE', 'timefly') as string,
+	// PostgreSQL Configuration
+	POSTGRES_HOST: getEnv('POSTGRES_HOST', 'localhost') as string,
+	POSTGRES_PORT: getEnvNumber('POSTGRES_PORT', 5432),
+	POSTGRES_USER: getEnv('POSTGRES_USER', 'postgres') as string,
+	POSTGRES_PASSWORD: getEnv('POSTGRES_PASSWORD', '') as string,
+	POSTGRES_DATABASE: getEnv('POSTGRES_DATABASE', 'timefly') as string,
 
 	// ClickHouse Configuration
 	CLICKHOUSE_HOST: getEnv('CLICKHOUSE_HOST', 'http://localhost') as string,

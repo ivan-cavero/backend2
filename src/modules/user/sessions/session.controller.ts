@@ -3,19 +3,13 @@ import * as sessionService from './session.service'
 
 export const listUserSessionsHandler = async (c: Context) => {
 	const uuid = c.req.param('uuid')
-	const sessions = await sessionService.listUserSessions(uuid)
+	const sessions = await sessionService.getUserSessions(uuid)
 	return c.json(sessions)
 }
 
 export const listUserActiveSessionsHandler = async (c: Context) => {
 	const uuid = c.req.param('uuid')
-	const sessions = await sessionService.listUserActiveSessions(uuid)
-	return c.json(sessions)
-}
-
-export const listUserRevokedSessionsHandler = async (c: Context) => {
-	const uuid = c.req.param('uuid')
-	const sessions = await sessionService.listUserRevokedSessions(uuid)
+	const sessions = await sessionService.getActiveUserSessions(uuid)
 	return c.json(sessions)
 }
 

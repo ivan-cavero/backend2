@@ -1,11 +1,14 @@
 /**
- * Service for managing refresh tokens in the database.
+ * Service for managing refresh tokens in PostgreSQL database.
  * Handles creation, validation, revocation, and cleanup of refresh tokens.
+ * 
+ * This service uses Bun's native SQL API with tagged template literals
+ * for safe query execution and automatic SQL injection protection.
  */
-import { mysqlPool } from '@/db/mysql'
+
+import { postgresDb } from '@/db/postgresql'
 import { generateRefreshToken } from './auth.service'
 import type { RefreshToken } from './auth.types'
-import type { RowDataPacket } from 'mysql2/promise'
 
 const MAX_REFRESH_TOKENS_PER_USER = 5
 const REFRESH_TOKEN_EXPIRY_DAYS = 30
@@ -16,28 +19,33 @@ const REFRESH_TOKEN_EXPIRY_DAYS = 30
  */
 export async function createRefreshToken({ userId, userAgent, ipAddress }: { userId: number, userAgent?: string, ipAddress?: string }): Promise<RefreshToken> {
   // Remove oldest if over limit
-  const [tokens] = await mysqlPool.query<RowDataPacket[]>(
-    'SELECT id FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL AND deleted_at IS NULL ORDER BY created_at ASC',
-    [userId]
-  )
+  const tokens = await postgresDb`
+    SELECT id FROM refresh_tokens 
+    WHERE user_id = ${userId} AND revoked_at IS NULL AND deleted_at IS NULL 
+    ORDER BY created_at ASC
+  ` as Array<{ id: number }>
+  
   if (tokens.length >= MAX_REFRESH_TOKENS_PER_USER) {
     const oldest = tokens[0]
-    await mysqlPool.query('UPDATE refresh_tokens SET revoked_at = CURRENT_TIMESTAMP, deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [oldest.id])
+    await postgresDb`
+      UPDATE refresh_tokens 
+      SET revoked_at = CURRENT_TIMESTAMP, deleted_at = CURRENT_TIMESTAMP 
+      WHERE id = ${oldest.id}
+    `
   }
 
   const uuid = Bun.randomUUIDv7()
   const token = generateRefreshToken()
   const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
 
-  await mysqlPool.query(
-    'INSERT INTO refresh_tokens (uuid, user_id, token, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [uuid, userId, token, userAgent, ipAddress, expiresAt]
-  )
+  await postgresDb`
+    INSERT INTO refresh_tokens (uuid, user_id, token, user_agent, ip_address, expires_at)
+    VALUES (${uuid}, ${userId}, ${token}, ${userAgent}, ${ipAddress}, ${expiresAt})
+  `
 
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    'SELECT * FROM refresh_tokens WHERE uuid = ?',
-    [uuid]
-  )
+  const rows = await postgresDb`
+    SELECT * FROM refresh_tokens WHERE uuid = ${uuid}
+  ` as RefreshTokenDbRow[]
   return mapDbRefreshTokenToRefreshToken(rows[0])
 }
 
@@ -45,10 +53,10 @@ export async function createRefreshToken({ userId, userAgent, ipAddress }: { use
  * Finds a refresh token by its token string, only if it is active and not revoked.
  */
 export async function findRefreshToken(token: string): Promise<RefreshToken | null> {
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    'SELECT * FROM refresh_tokens WHERE token = ? AND revoked_at IS NULL AND deleted_at IS NULL',
-    [token]
-  )
+  const rows = await postgresDb`
+    SELECT * FROM refresh_tokens 
+    WHERE token = ${token} AND revoked_at IS NULL AND deleted_at IS NULL
+  ` as RefreshTokenDbRow[]
   if (!rows[0]) { return null }
   return mapDbRefreshTokenToRefreshToken(rows[0])
 }
@@ -57,36 +65,54 @@ export async function findRefreshToken(token: string): Promise<RefreshToken | nu
  * Revokes a refresh token by its token string.
  */
 export async function revokeRefreshToken(token: string): Promise<void> {
-  await mysqlPool.query(
-    'UPDATE refresh_tokens SET revoked_at = CURRENT_TIMESTAMP, deleted_at = CURRENT_TIMESTAMP WHERE token = ?',
-    [token]
-  )
+  await postgresDb`
+    UPDATE refresh_tokens 
+    SET revoked_at = CURRENT_TIMESTAMP, deleted_at = CURRENT_TIMESTAMP 
+    WHERE token = ${token}
+  `
 }
 
 /**
  * Revokes all refresh tokens for a given user ID.
  */
 export async function revokeAllUserRefreshTokens(userId: number): Promise<void> {
-  await mysqlPool.query(
-    'UPDATE refresh_tokens SET revoked_at = CURRENT_TIMESTAMP, deleted_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-    [userId]
-  )
+  await postgresDb`
+    UPDATE refresh_tokens 
+    SET revoked_at = CURRENT_TIMESTAMP, deleted_at = CURRENT_TIMESTAMP 
+    WHERE user_id = ${userId}
+  `
 }
 
 /**
- * Maps a database row to a RefreshToken object.
+ * Database row interface for refresh token queries
  */
-function mapDbRefreshTokenToRefreshToken(row: RowDataPacket): RefreshToken {
+interface RefreshTokenDbRow {
+  id: number
+  uuid: string
+  user_id: number
+  token: string
+  user_agent?: string
+  ip_address?: string
+  created_at: Date
+  expires_at: Date
+  revoked_at?: Date
+  last_used_at?: Date
+}
+
+/**
+ * Maps database row to RefreshToken object
+ */
+function mapDbRefreshTokenToRefreshToken(row: RefreshTokenDbRow): RefreshToken {
   return {
     id: row.id,
     uuid: row.uuid,
     userId: row.user_id,
     token: row.token,
-    userAgent: row.user_agent || undefined,
-    ipAddress: row.ip_address || undefined,
+    userAgent: row.user_agent,
+    ipAddress: row.ip_address,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
-    revokedAt: row.revoked_at || undefined,
-    lastUsedAt: row.last_used_at || undefined,
+    revokedAt: row.revoked_at,
+    lastUsedAt: row.last_used_at
   }
 } 

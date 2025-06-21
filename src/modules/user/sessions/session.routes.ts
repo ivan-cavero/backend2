@@ -5,7 +5,7 @@ import { SessionPublicSchema } from './session.schema'
 import {
 	getUserSessionByIdHandler,
 	listUserActiveSessionsHandler,
-	listUserRevokedSessionsHandler,
+	
 	listUserSessionsHandler,
 	revokeAllUserSessionsHandler, 
 	revokeUserSessionHandler
@@ -40,18 +40,7 @@ sessionRoutes.get(
 	listUserActiveSessionsHandler
 )
 
-sessionRoutes.get(
-	'/revoked',
-	describeRoute({
-		tags: ['User Sessions'],
-		summary: 'List revoked sessions for a user',
-		responses: {
-			200: { description: 'List of revoked sessions', content: { 'application/json': { schema: resolver(SessionPublicSchema.array()) } } },
-			401: { description: 'Unauthorized', content: { 'application/json': { schema: resolver(ErrorSchema) } } }
-		}
-	}),
-	listUserRevokedSessionsHandler
-)
+
 
 sessionRoutes.get(
 	'/:sessionId',

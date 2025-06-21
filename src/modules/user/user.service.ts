@@ -1,123 +1,164 @@
-import { mysqlPool } from '@/db/mysql'
-import type { User, ProviderIdentity } from './user.types'
-import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise'
+/**
+ * User service for managing user data in PostgreSQL
+ * 
+ * This service uses Bun's native SQL API with tagged template literals
+ * for safe query execution and automatic SQL injection protection.
+ */
 
+import { postgresDb } from '@/db/postgresql'
+import type { User } from './user.types'
+
+/**
+ * Get user by UUID with provider identities
+ */
 export async function getUserByUuid(uuid: string): Promise<User | null> {
-	const [rows] = await mysqlPool.query<RowDataPacket[]>(`
+	const rows = await postgresDb`
 		SELECT u.*, 
-		       GROUP_CONCAT(
-		           JSON_OBJECT(
-		               'provider', p.name,
-		               'providerUserId', i.provider_user_id
-		           )
+		       COALESCE(
+		           json_agg(
+		               json_build_object(
+		                   'provider', p.name,
+		                   'providerUserId', i.provider_user_id
+		               )
+		           ) FILTER (WHERE i.id IS NOT NULL),
+		           '[]'::json
 		       ) as provider_identities
 		FROM users u
 		LEFT JOIN identities i ON u.id = i.user_id AND i.deleted_at IS NULL
 		LEFT JOIN providers p ON i.provider_id = p.id
-		WHERE u.uuid = ? AND u.deleted_at IS NULL
+		WHERE u.uuid = ${uuid} AND u.deleted_at IS NULL
 		GROUP BY u.id
-	`, [uuid])
+	` as UserDbRow[]
 	const user = rows[0]
 	return user ? mapDbUserToUser(user) : null
 }
 
+/**
+ * Get user by email with provider identities
+ */
 export async function getUserByEmail(email: string): Promise<User | null> {
-	const [rows] = await mysqlPool.query<RowDataPacket[]>(`
+	const rows = await postgresDb`
 		SELECT u.*, 
-		       GROUP_CONCAT(
-		           JSON_OBJECT(
-		               'provider', p.name,
-		               'providerUserId', i.provider_user_id
-		           )
+		       COALESCE(
+		           json_agg(
+		               json_build_object(
+		                   'provider', p.name,
+		                   'providerUserId', i.provider_user_id
+		               )
+		           ) FILTER (WHERE i.id IS NOT NULL),
+		           '[]'::json
 		       ) as provider_identities
 		FROM users u
 		LEFT JOIN identities i ON u.id = i.user_id AND i.deleted_at IS NULL
 		LEFT JOIN providers p ON i.provider_id = p.id
-		WHERE u.email = ? AND u.deleted_at IS NULL
+		WHERE u.email = ${email} AND u.deleted_at IS NULL
 		GROUP BY u.id
-	`, [email])
+	` as UserDbRow[]
 	const user = rows[0]
 	return user ? mapDbUserToUser(user) : null
 }
 
+/**
+ * List all users with provider identities
+ */
 export async function listUsers(): Promise<User[]> {
-	const [rows] = await mysqlPool.query<RowDataPacket[]>(`
+	const rows = await postgresDb`
 		SELECT u.*, 
-		       GROUP_CONCAT(
-		           JSON_OBJECT(
-		               'provider', p.name,
-		               'providerUserId', i.provider_user_id
-		           )
+		       COALESCE(
+		           json_agg(
+		               json_build_object(
+		                   'provider', p.name,
+		                   'providerUserId', i.provider_user_id
+		               )
+		           ) FILTER (WHERE i.id IS NOT NULL),
+		           '[]'::json
 		       ) as provider_identities
 		FROM users u
 		LEFT JOIN identities i ON u.id = i.user_id AND i.deleted_at IS NULL
 		LEFT JOIN providers p ON i.provider_id = p.id
 		WHERE u.deleted_at IS NULL
 		GROUP BY u.id
-	`)
+	` as UserDbRow[]
 	return rows.map(mapDbUserToUser)
 }
 
+/**
+ * Create a new user with optional provider identities
+ * Uses PostgreSQL transaction for atomicity
+ */
 export async function createUser(data: Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>): Promise<User> {
-	const connection = await mysqlPool.getConnection()
-	try {
-		await connection.beginTransaction()
+	// Use PostgreSQL transaction with reserved connection
+	using transaction = await postgresDb.reserve()
 
-		// Create user
-		const [result] = await connection.query<ResultSetHeader>(
-			'INSERT INTO users (uuid, email, name, avatar_url) VALUES (?, ?, ?, ?)',
-			[data.uuid, data.email, data.name, data.avatarUrl]
-		)
+	try {
+		await transaction`BEGIN`
+
+		// Create user with RETURNING clause (PostgreSQL feature)
+		const result = await transaction`
+			INSERT INTO users (uuid, email, name, avatar_url)
+			VALUES (${data.uuid}, ${data.email}, ${data.name}, ${data.avatarUrl})
+			RETURNING id
+		` as Array<{ id: number }>
+
+		const userId = result[0].id
 
 		// If provider identities are provided, create them
 		if (data.providerIdentities?.length) {
 			for (const identity of data.providerIdentities) {
-				const [providerResult] = await connection.query<RowDataPacket[]>(
-					'SELECT id FROM providers WHERE name = ? AND deleted_at IS NULL',
-					[identity.provider]
-				)
-				if (providerResult.length > 0) {
-					await connection.query(
-						'INSERT INTO identities (uuid, user_id, provider_id, provider_user_id) VALUES (?, ?, ?, ?)',
-						[Bun.randomUUIDv7(), result.insertId, providerResult[0].id, identity.providerUserId]
-					)
+				const providerRows = await transaction`
+					SELECT id FROM providers 
+					WHERE name = ${identity.provider} AND deleted_at IS NULL
+				` as Array<{ id: number }>
+				
+				if (providerRows.length > 0) {
+					await transaction`
+						INSERT INTO identities (uuid, user_id, provider_id, provider_user_id)
+						VALUES (${Bun.randomUUIDv7()}, ${userId}, ${providerRows[0].id}, ${identity.providerUserId})
+					`
 				}
 			}
 		}
 
-		await connection.commit()
+		await transaction`COMMIT`
 		return getUserByEmail(data.email) as Promise<User>
 	} catch (error) {
-		await connection.rollback()
+		await transaction`ROLLBACK`
 		throw error
-	} finally {
-		connection.release()
 	}
 }
 
+/**
+ * Update user by UUID with dynamic field updates
+ */
 export async function updateUserByUuid(uuid: string, data: Partial<Omit<User, 'id' | 'uuid' | 'createdAt' | 'updatedAt' | 'deletedAt'>>): Promise<User | null> {
-	const fields = []
-	const values = []
-	if (data.email) { fields.push('email = ?'); values.push(data.email) }
-	if (data.name) { fields.push('name = ?'); values.push(data.name) }
-	if (data.avatarUrl) { fields.push('avatar_url = ?'); values.push(data.avatarUrl) }
-	if (fields.length === 0) { return getUserByUuid(uuid) }
-	values.push(uuid)
-	await mysqlPool.query<ResultSetHeader>(
-		`UPDATE users SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE uuid = ? AND deleted_at IS NULL`,
-		values
-	)
+	if (Object.keys(data).length === 0) { 
+		return getUserByUuid(uuid)
+	}
+
+	// Build dynamic update using PostgreSQL object syntax
+	const updateData: Record<string, unknown> = {}
+	if (data.email !== undefined) {
+		updateData.email = data.email
+	}
+	if (data.name !== undefined) {
+		updateData.name = data.name
+	}
+	if (data.avatarUrl !== undefined) {
+		updateData.avatar_url = data.avatarUrl
+	}
+
+	await postgresDb`
+		UPDATE users 
+		SET ${postgresDb(updateData)}, updated_at = CURRENT_TIMESTAMP
+		WHERE uuid = ${uuid} AND deleted_at IS NULL
+	`
+	
 	return getUserByUuid(uuid)
 }
 
-export async function softDeleteUserByUuid(uuid: string): Promise<boolean> {
-	const [result] = await mysqlPool.query<ResultSetHeader>(
-		'UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE uuid = ? AND deleted_at IS NULL',
-		[uuid]
-	)
-	return result.affectedRows > 0
-}
-
+/**
+ * Create or update user from OAuth provider data
+ */
 export async function upsertUserFromOAuth({ provider, providerUserId, email, name, avatarUrl }: { 
 	provider: string, 
 	providerUserId: string, 
@@ -144,29 +185,68 @@ export async function upsertUserFromOAuth({ provider, providerUserId, email, nam
 	return getUserByEmail(email) as Promise<User>
 }
 
+/**
+ * Soft delete user by UUID
+ */
+export async function softDeleteUserByUuid(uuid: string): Promise<boolean> {
+	const result = await postgresDb`
+		UPDATE users 
+		SET deleted_at = CURRENT_TIMESTAMP 
+		WHERE uuid = ${uuid} AND deleted_at IS NULL
+	`
+	return result.count > 0
+}
+
+/**
+ * Get user by internal ID with provider identities
+ */
 export async function getUserById(id: number): Promise<User | null> {
-	const [rows] = await mysqlPool.query<RowDataPacket[]>(`
+	const rows = await postgresDb`
 		SELECT u.*, 
-		       GROUP_CONCAT(
-		           JSON_OBJECT(
-		               'provider', p.name,
-		               'providerUserId', i.provider_user_id
-		           )
+		       COALESCE(
+		           json_agg(
+		               json_build_object(
+		                   'provider', p.name,
+		                   'providerUserId', i.provider_user_id
+		               )
+		           ) FILTER (WHERE i.id IS NOT NULL),
+		           '[]'::json
 		       ) as provider_identities
 		FROM users u
 		LEFT JOIN identities i ON u.id = i.user_id AND i.deleted_at IS NULL
 		LEFT JOIN providers p ON i.provider_id = p.id
-		WHERE u.id = ? AND u.deleted_at IS NULL
+		WHERE u.id = ${id} AND u.deleted_at IS NULL
 		GROUP BY u.id
-	`, [id])
+	` as UserDbRow[]
 	const user = rows[0]
 	return user ? mapDbUserToUser(user) : null
 }
 
-function mapDbUserToUser(row: RowDataPacket): User {
-	const providerIdentities = row.provider_identities 
-		? JSON.parse(`[${row.provider_identities}]`)
-		: undefined
+/**
+ * Database row interface for user queries
+ */
+interface UserDbRow {
+	id: number
+	uuid: string
+	email: string
+	name: string
+	avatar_url?: string
+	created_at: Date
+	updated_at: Date
+	deleted_at?: Date
+	provider_identities?: Array<{ provider: string; providerUserId: string }>
+}
+
+/**
+ * Map database row to User object
+ * Handles PostgreSQL JSON aggregation and UUID generation
+ */
+function mapDbUserToUser(row: UserDbRow): User {
+	// Parse provider identities from PostgreSQL JSON aggregation
+	let providerIdentities: { provider: string; providerUserId: string }[] = []
+	if (row.provider_identities && Array.isArray(row.provider_identities)) {
+		providerIdentities = row.provider_identities.filter((identity) => identity.provider)
+	}
 
 	return {
 		id: row.id,
@@ -176,7 +256,7 @@ function mapDbUserToUser(row: RowDataPacket): User {
 		avatarUrl: row.avatar_url,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
-		deletedAt: row.deleted_at || undefined,
+		deletedAt: row.deleted_at,
 		providerIdentities
 	}
 }

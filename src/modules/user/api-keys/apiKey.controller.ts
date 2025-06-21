@@ -3,19 +3,13 @@ import * as apiKeyService from './apiKey.service'
 
 export const listUserApiKeysHandler = async (c: Context) => {
   const uuid = c.req.param('uuid')
-  const keys = await apiKeyService.listUserApiKeys(uuid)
+  const keys = await apiKeyService.getUserApiKeys(uuid)
   return c.json(keys)
 }
 
 export const listUserActiveApiKeysHandler = async (c: Context) => {
   const uuid = c.req.param('uuid')
-  const keys = await apiKeyService.listUserActiveApiKeys(uuid)
-  return c.json(keys)
-}
-
-export const listUserRevokedApiKeysHandler = async (c: Context) => {
-  const uuid = c.req.param('uuid')
-  const keys = await apiKeyService.listUserRevokedApiKeys(uuid)
+  const keys = await apiKeyService.getActiveUserApiKeys(uuid)
   return c.json(keys)
 }
 
@@ -32,9 +26,18 @@ export const getUserApiKeyByIdHandler = async (c: Context) => {
 export const createUserApiKeyHandler = async (c: Context) => {
   const uuid = c.req.param('uuid')
   const { label, description } = await c.req.json().catch(() => ({}))
-  const { apiKey, apiKeyPublic } = await apiKeyService.createUserApiKey({ userUuid: uuid, label, description })
+  
+  // Generate API key and hash it
+  const rawApiKey = Bun.randomUUIDv7() + Bun.hash(Bun.randomUUIDv7() + Date.now().toString()).toString(16)
+  const hashedApiKey = await Bun.password.hash(rawApiKey, { algorithm: 'argon2id' })
+  
+  const apiKeyPublic = await apiKeyService.createUserApiKey(uuid, hashedApiKey, label, description)
+  if (!apiKeyPublic) {
+    return c.json({ ok: false, error: 'Failed to create API key' }, 400)
+  }
+  
   // Solo se muestra el valor real una vez
-  return c.json({ apiKey, apiKeyPublic }, 201)
+  return c.json({ apiKey: rawApiKey, apiKeyPublic }, 201)
 }
 
 export const revokeUserApiKeyHandler = async (c: Context) => {
@@ -62,10 +65,15 @@ export const regenerateUserApiKeyHandler = async (c: Context) => {
     return c.json({ ok: false, error: 'API key not found' }, 404)
   }
   await apiKeyService.revokeUserApiKey(uuid, keyUuid)
-  const { apiKey, apiKeyPublic } = await apiKeyService.createUserApiKey({
-    userUuid: uuid,
-    label: oldKey.label,
-    description: oldKey.description
-  })
-  return c.json({ apiKey, apiKeyPublic })
+  
+  // Generate new API key and hash it
+  const rawApiKey = Bun.randomUUIDv7() + Bun.hash(Bun.randomUUIDv7() + Date.now().toString()).toString(16)
+  const hashedApiKey = await Bun.password.hash(rawApiKey, { algorithm: 'argon2id' })
+  
+  const apiKeyPublic = await apiKeyService.createUserApiKey(uuid, hashedApiKey, oldKey.label, oldKey.description)
+  if (!apiKeyPublic) {
+    return c.json({ ok: false, error: 'Failed to regenerate API key' }, 400)
+  }
+  
+  return c.json({ apiKey: rawApiKey, apiKeyPublic })
 } 

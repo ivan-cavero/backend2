@@ -12,12 +12,12 @@ export interface ServerConfig {
 	readonly JWT_SECRET: string;
 	readonly FRONTEND_URL: string;
 
-	// MySQL Configuration
-	readonly MYSQL_HOST: string;
-	readonly MYSQL_PORT: number;
-	readonly MYSQL_USER: string;
-	readonly MYSQL_PASSWORD: string;
-	readonly MYSQL_DATABASE: string;
+	// PostgreSQL Configuration
+	readonly POSTGRES_HOST: string;
+	readonly POSTGRES_PORT: number;
+	readonly POSTGRES_USER: string;
+	readonly POSTGRES_PASSWORD: string;
+	readonly POSTGRES_DATABASE: string;
 
 	// ClickHouse Configuration
 	readonly CLICKHOUSE_HOST: string;
@@ -32,26 +32,3 @@ export interface ServerConfig {
  * Combined application configuration
  */
 export interface AppConfig extends ServerConfig {}
-
-/**
- * Environment variable types
- */
-export type EnvVarType = 'string' | 'number' | 'boolean'
-
-/**
- * Environment variable definition
- */
-export interface EnvVarDefinition {
-	readonly type: EnvVarType
-	readonly required: boolean
-	readonly default?: string | number | boolean
-}
-
-/**
- * Environment variable definitions map
- */
-export type EnvVarDefinitions = {
-	readonly [K in keyof AppConfig]?: EnvVarDefinition
-} & {
-	readonly [key: string]: EnvVarDefinition
-}

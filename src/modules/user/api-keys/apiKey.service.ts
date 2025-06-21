@@ -1,11 +1,33 @@
-import { mysqlPool } from '@/db/mysql'
+/**
+ * API Key service for managing user API keys in PostgreSQL
+ * 
+ * This service uses Bun's native SQL API with tagged template literals
+ * for safe query execution and automatic SQL injection protection.
+ */
+
+import { postgresDb } from '@/db/postgresql'
 import type { UserApiKey, UserApiKeyPublic } from './apiKey.types'
-import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise'
 
 // Maximum number of API keys per user (default: 1)
 export const MAX_API_KEYS_PER_USER = 1
 
-function mapDbApiKeyToUserApiKey(row: RowDataPacket): UserApiKey {
+/**
+ * Database row interface for API key queries
+ */
+interface ApiKeyDbRow {
+  id: number
+  uuid: string
+  user_id: number
+  api_key_hash: string
+  label?: string
+  description?: string
+  created_at: Date
+  last_used_at: Date
+  revoked_at?: Date | null
+  deleted_at?: Date | null
+}
+
+function mapDbApiKeyToUserApiKey(row: ApiKeyDbRow): UserApiKey {
   return {
     id: row.id,
     uuid: row.uuid,
@@ -21,53 +43,47 @@ function mapDbApiKeyToUserApiKey(row: RowDataPacket): UserApiKey {
 }
 
 function toPublicApiKey(apiKey: UserApiKey): UserApiKeyPublic {
-  // Do not expose id, userId or apiKeyHash
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id: _id, userId: _userId, apiKeyHash: _hash, ...rest } = apiKey
-  return rest
+  const { id: _id, userId: _userId, apiKeyHash: _hash, ...publicData } = apiKey
+  return publicData
 }
 
-export async function listUserApiKeys(userUuid: string): Promise<UserApiKeyPublic[]> {
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    `SELECT k.* FROM api_keys k
-     JOIN users u ON k.user_id = u.id
-     WHERE u.uuid = ? AND k.deleted_at IS NULL
-     ORDER BY k.created_at DESC`,
-    [userUuid]
-  )
-  return rows.map(mapDbApiKeyToUserApiKey).map(toPublicApiKey)
+/**
+ * Get all user API keys for a user by UUID
+ */
+export async function getUserApiKeys(userUuid: string): Promise<UserApiKeyPublic[]> {
+  const rows = await postgresDb`
+    SELECT k.* FROM api_keys k
+    JOIN users u ON k.user_id = u.id
+    WHERE u.uuid = ${userUuid} AND k.deleted_at IS NULL
+    ORDER BY k.created_at DESC
+  ` as ApiKeyDbRow[]
+  return rows.map((row) => toPublicApiKey(mapDbApiKeyToUserApiKey(row)))
 }
 
-export async function listUserActiveApiKeys(userUuid: string): Promise<UserApiKeyPublic[]> {
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    `SELECT k.* FROM api_keys k
-     JOIN users u ON k.user_id = u.id
-     WHERE u.uuid = ? AND k.revoked_at IS NULL AND k.deleted_at IS NULL
-     ORDER BY k.created_at DESC`,
-    [userUuid]
-  )
-  return rows.map(mapDbApiKeyToUserApiKey).map(toPublicApiKey)
+/**
+ * Get all active (non-revoked) user API keys for a user by UUID
+ */
+export async function getActiveUserApiKeys(userUuid: string): Promise<UserApiKeyPublic[]> {
+  const rows = await postgresDb`
+    SELECT k.* FROM api_keys k
+    JOIN users u ON k.user_id = u.id
+    WHERE u.uuid = ${userUuid} AND k.revoked_at IS NULL AND k.deleted_at IS NULL
+    ORDER BY k.created_at DESC
+  ` as ApiKeyDbRow[]
+  return rows.map((row) => toPublicApiKey(mapDbApiKeyToUserApiKey(row)))
 }
 
-export async function listUserRevokedApiKeys(userUuid: string): Promise<UserApiKeyPublic[]> {
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    `SELECT k.* FROM api_keys k
-     JOIN users u ON k.user_id = u.id
-     WHERE u.uuid = ? AND k.revoked_at IS NOT NULL AND k.deleted_at IS NULL
-     ORDER BY k.revoked_at DESC`,
-    [userUuid]
-  )
-  return rows.map(mapDbApiKeyToUserApiKey).map(toPublicApiKey)
-}
-
+/**
+ * Get API key by user UUID and key UUID
+ */
 export async function getUserApiKeyById(userUuid: string, keyUuid: string): Promise<UserApiKeyPublic | null> {
-  const [rows] = await mysqlPool.query<RowDataPacket[]>(
-    `SELECT k.* FROM api_keys k
-     JOIN users u ON k.user_id = u.id
-     WHERE u.uuid = ? AND k.uuid = ? AND k.deleted_at IS NULL
-     LIMIT 1`,
-    [userUuid, keyUuid]
-  )
+  const rows = await postgresDb`
+    SELECT k.* FROM api_keys k
+    JOIN users u ON k.user_id = u.id
+    WHERE u.uuid = ${userUuid} AND k.uuid = ${keyUuid} AND k.deleted_at IS NULL
+    LIMIT 1
+  ` as ApiKeyDbRow[]
   const row = rows[0]
   if (!row) {
     return null
@@ -75,72 +91,72 @@ export async function getUserApiKeyById(userUuid: string, keyUuid: string): Prom
   return toPublicApiKey(mapDbApiKeyToUserApiKey(row))
 }
 
+/**
+ * Revoke a user API key by user UUID and key UUID
+ */
 export async function revokeUserApiKey(userUuid: string, keyUuid: string): Promise<boolean> {
-  const [result] = await mysqlPool.query<ResultSetHeader>(
-    `UPDATE api_keys k
-     JOIN users u ON k.user_id = u.id
-     SET k.revoked_at = NOW()
-     WHERE u.uuid = ? AND k.uuid = ? AND k.revoked_at IS NULL AND k.deleted_at IS NULL`,
-    [userUuid, keyUuid]
-  )
-  return result.affectedRows > 0
+  const result = await postgresDb`
+    UPDATE api_keys k
+    SET revoked_at = CURRENT_TIMESTAMP
+    FROM users u
+    WHERE k.user_id = u.id 
+    AND u.uuid = ${userUuid} 
+    AND k.uuid = ${keyUuid} 
+    AND k.revoked_at IS NULL 
+    AND k.deleted_at IS NULL
+  `
+  return result.count > 0
 }
 
+/**
+ * Revoke all user API keys by user UUID
+ */
 export async function revokeAllUserApiKeys(userUuid: string): Promise<number> {
-  const [result] = await mysqlPool.query<ResultSetHeader>(
-    `UPDATE api_keys k
-     JOIN users u ON k.user_id = u.id
-     SET k.revoked_at = NOW()
-     WHERE u.uuid = ? AND k.revoked_at IS NULL AND k.deleted_at IS NULL`,
-    [userUuid]
-  )
-  return result.affectedRows
+  const result = await postgresDb`
+    UPDATE api_keys k
+    SET revoked_at = CURRENT_TIMESTAMP
+    FROM users u
+    WHERE k.user_id = u.id 
+    AND u.uuid = ${userUuid} 
+    AND k.revoked_at IS NULL 
+    AND k.deleted_at IS NULL
+  `
+  return result.count
 }
 
-export async function createUserApiKey({
-  userUuid,
-  label,
-  description
-}: {
-  userUuid: string
-  label?: string
-  description?: string
-}): Promise<{ apiKey: string; apiKeyPublic: UserApiKeyPublic }> {
-  // 1. Find user_id
-  const [userRows] = await mysqlPool.query<RowDataPacket[]>(
-    'SELECT id FROM users WHERE uuid = ? AND deleted_at IS NULL LIMIT 1',
-    [userUuid]
-  )
-  const user = userRows[0]
-  if (!user) {
-    throw new Error('User not found')
+/**
+ * Create a new API key for a user, enforcing the maximum limit
+ */
+export async function createUserApiKey(userUuid: string, hashedApiKey: string, label?: string, description?: string): Promise<UserApiKeyPublic | null> {
+  // Check if user exists
+  const userRows = await postgresDb`
+    SELECT id FROM users 
+    WHERE uuid = ${userUuid} AND deleted_at IS NULL
+  ` as Array<{ id: number }>
+  
+  if (userRows.length === 0) {
+    return null
   }
-  // 2. Enforce API key limit
-  const [countRows] = await mysqlPool.query<RowDataPacket[]>(
-    'SELECT COUNT(*) as count FROM api_keys WHERE user_id = ? AND revoked_at IS NULL AND deleted_at IS NULL',
-    [user.id]
-  )
-  if (countRows[0].count >= MAX_API_KEYS_PER_USER) {
-    throw new Error('API key limit reached for this user')
+
+  const userId = userRows[0].id
+
+  // Check current API key count
+  const countRows = await postgresDb`
+    SELECT COUNT(*) as count 
+    FROM api_keys 
+    WHERE user_id = ${userId} AND revoked_at IS NULL AND deleted_at IS NULL
+  ` as Array<{ count: string }>
+
+  if (Number(countRows[0].count) >= MAX_API_KEYS_PER_USER) {
+    throw new Error(`Maximum of ${MAX_API_KEYS_PER_USER} API keys allowed per user`)
   }
-  // 3. Generate secure API key
-  const rawKey = Bun.randomUUIDv7() + Bun.hash(Bun.randomUUIDv7() + Date.now().toString()).toString(16)
-  const apiKeyHash = await Bun.password.hash(rawKey, { algorithm: 'argon2id' })
-  const keyUuid = Bun.randomUUIDv7()
-  // 4. Insert into database
-  await mysqlPool.query<ResultSetHeader>(
-    'INSERT INTO api_keys (uuid, user_id, api_key_hash, label, description) VALUES (?, ?, ?, ?, ?)',
-    [keyUuid, user.id, apiKeyHash, label, description]
-  )
-  // 5. Only show the real value once
-  const apiKeyPublic: UserApiKeyPublic = {
-    uuid: keyUuid,
-    label,
-    description,
-    createdAt: new Date(),
-    lastUsedAt: new Date(),
-    revokedAt: null,
-    deletedAt: null
-  }
-  return { apiKey: rawKey, apiKeyPublic }
+
+  // Create new API key
+  const uuid = Bun.randomUUIDv7()
+  await postgresDb`
+    INSERT INTO api_keys (uuid, user_id, api_key_hash, label, description)
+    VALUES (${uuid}, ${userId}, ${hashedApiKey}, ${label}, ${description})
+  `
+
+  return getUserApiKeyById(userUuid, uuid)
 } 
