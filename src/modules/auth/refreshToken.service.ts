@@ -8,7 +8,7 @@
 
 import { postgresDb } from '@/db/postgresql'
 import { generateRefreshToken } from './auth.service'
-import type { RefreshToken } from './auth.types'
+import type { RefreshToken, RefreshTokenDbRow } from './auth.types'
 
 const MAX_REFRESH_TOKENS_PER_USER = 5
 const REFRESH_TOKEN_EXPIRY_DAYS = 30
@@ -83,21 +83,7 @@ export async function revokeAllUserRefreshTokens(userId: number): Promise<void> 
   `
 }
 
-/**
- * Database row interface for refresh token queries
- */
-interface RefreshTokenDbRow {
-  id: number
-  uuid: string
-  user_id: number
-  token: string
-  user_agent?: string
-  ip_address?: string
-  created_at: Date
-  expires_at: Date
-  revoked_at?: Date
-  last_used_at?: Date
-}
+
 
 /**
  * Maps database row to RefreshToken object

@@ -6,7 +6,7 @@
  */
 
 import { postgresDb } from '@/db/postgresql'
-import type { User } from './user.types'
+import type { User, UserDbRow } from './user.types'
 
 /**
  * Get user by UUID with provider identities
@@ -222,20 +222,7 @@ export async function getUserById(id: number): Promise<User | null> {
 	return user ? mapDbUserToUser(user) : null
 }
 
-/**
- * Database row interface for user queries
- */
-interface UserDbRow {
-	id: number
-	uuid: string
-	email: string
-	name: string
-	avatar_url?: string
-	created_at: Date
-	updated_at: Date
-	deleted_at?: Date
-	provider_identities?: Array<{ provider: string; providerUserId: string }>
-}
+
 
 /**
  * Map database row to User object

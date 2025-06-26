@@ -6,26 +6,12 @@
  */
 
 import { postgresDb } from '@/db/postgresql'
-import type { UserApiKey, UserApiKeyPublic } from './apiKey.types'
+import type { UserApiKey, UserApiKeyPublic, ApiKeyDbRow } from './apiKey.types'
 
 // Maximum number of API keys per user (default: 1)
 export const MAX_API_KEYS_PER_USER = 1
 
-/**
- * Database row interface for API key queries
- */
-interface ApiKeyDbRow {
-  id: number
-  uuid: string
-  user_id: number
-  api_key_hash: string
-  label?: string
-  description?: string
-  created_at: Date
-  last_used_at: Date
-  revoked_at?: Date | null
-  deleted_at?: Date | null
-}
+
 
 function mapDbApiKeyToUserApiKey(row: ApiKeyDbRow): UserApiKey {
   return {

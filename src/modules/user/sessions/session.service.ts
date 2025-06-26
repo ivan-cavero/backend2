@@ -6,24 +6,9 @@
  */
 
 import { postgresDb } from '@/db/postgresql'
-import type { UserSession, UserSessionPublic } from './session.types'
+import type { UserSession, UserSessionPublic, SessionDbRow } from './session.types'
 
-/**
- * Database row interface for session queries
- */
-interface SessionDbRow {
-  id: number
-  uuid: string
-  user_id: number
-  token: string
-  user_agent?: string
-  ip_address?: string
-  created_at: Date
-  expires_at: Date
-  revoked_at?: Date | null
-  last_used_at: Date
-  deleted_at?: Date | null
-}
+
 
 function mapDbSessionToUserSession(row: SessionDbRow): UserSession {
   return {

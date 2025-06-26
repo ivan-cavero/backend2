@@ -15,7 +15,7 @@ import { HTTPException } from './errorHandler'
 import type { Context, Next } from 'hono'
 import { logger } from '@/utils/logger'
 
-interface ApiKeyRow {
+interface ApiKeyAuthRow {
   api_key_uuid: string
   user_uuid: string
   api_key_hash: string
@@ -42,7 +42,7 @@ export const apiKeyAuthMiddleware = async (c: Context, next: Next) => {
     FROM api_keys k
     JOIN users u ON k.user_id = u.id
     WHERE k.revoked_at IS NULL AND k.deleted_at IS NULL AND u.deleted_at IS NULL
-  ` as ApiKeyRow[]
+  ` as ApiKeyAuthRow[]
 
   logger.info(`API Key middleware - Found ${rows.length} active API keys in database`)
 

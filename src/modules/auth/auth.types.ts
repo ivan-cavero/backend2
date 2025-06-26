@@ -10,41 +10,67 @@ export interface GoogleUser {
 	family_name: string // Last name
 	picture?: string // URL to profile picture
 	locale?: string // User locale
+	hd?: string;
 }
 
 /**
- * JWT payload for access tokens.
+ * JWT payload structure for access tokens
  */
 export interface JwtPayload {
-	sub: string // Subject (user UUID, not internal ID)
-	email: string // User email
-	exp?: number // Expiration time (Unix timestamp)
-	iss?: string // Issuer
-	iat?: number // Issued at
-	// biome-ignore lint/suspicious/noExplicitAny: false positive
-	[key: string]: any // Index signature for compatibility
+	/** Subject (user UUID, public identifier) */
+	sub: string;
+	/** User email address */
+	email: string;
+	/** Issuer of the token */
+	iss?: string;
+	/** Token issued at timestamp */
+	iat: number;
+	/** Token expires at timestamp */
+	exp: number;
 }
 
 /**
  * Represents a refresh token stored in the database.
  */
 export interface RefreshToken {
-	id?: number // Internal DB ID
-	uuid: string // Public UUID for the refresh token
-	userId: number // Internal user ID
-	token: string // The refresh token string
-	userAgent?: string // User agent string for the session
-	ipAddress?: string // IP address for the session
-	createdAt: Date // Creation timestamp
-	expiresAt: Date // Expiration timestamp
-	revokedAt?: Date // Revocation timestamp
-	lastUsedAt?: Date // Last used timestamp
+	id: number;
+	uuid: string;
+	userId: number;
+	token: string;
+	userAgent?: string;
+	ipAddress?: string;
+	createdAt: Date;
+	expiresAt: Date;
+	revokedAt?: Date;
+	lastUsedAt?: Date;
 }
 
 /**
- * Payload for creating a refresh token.
+ * Refresh token JWT payload (for encoding in token)
  */
 export interface RefreshTokenPayload {
-	userId: number // Internal user ID
-	token: string // The refresh token string
+	/** User UUID (public identifier) */
+	userUuid: string;
+	/** Internal user ID (for database queries) */
+	userId: number;
+	/** Token issued at timestamp */
+	iat: number;
+	/** Token expires at timestamp */
+	exp: number;
+}
+
+/**
+ * Database row interface for refresh token queries
+ */
+export interface RefreshTokenDbRow {
+	id: number;
+	uuid: string;
+	user_id: number;
+	token: string;
+	user_agent?: string;
+	ip_address?: string;
+	created_at: Date;
+	expires_at: Date;
+	revoked_at?: Date;
+	last_used_at?: Date;
 }

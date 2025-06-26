@@ -1,5 +1,7 @@
 import type { Context } from 'hono'
 import * as apiKeyService from './apiKey.service'
+import * as userService from '../user.service'
+import { HTTPException } from '@/middlewares/errorHandler'
 
 export const listUserApiKeysHandler = async (c: Context) => {
   const uuid = c.req.param('uuid')
@@ -76,4 +78,46 @@ export const regenerateUserApiKeyHandler = async (c: Context) => {
   }
   
   return c.json({ apiKey: rawApiKey, apiKeyPublic })
+}
+
+/**
+ * Verify API key validity and return user information
+ * 
+ * This handler leverages the apiKeyAuthMiddleware which:
+ * - Validates the API key exists and matches a hash in the database
+ * - Ensures the API key is not revoked (revoked_at IS NULL)
+ * - Ensures the API key is not deleted (deleted_at IS NULL)
+ * - Ensures the associated user is not deleted (user.deleted_at IS NULL)
+ * - Updates the last_used_at timestamp
+ * - Sets userUuid and apiKeyUuid in the context
+ * 
+ * If the middleware passes, we know the API key is valid and can return user info.
+ */
+export const verifyApiKeyHandler = async (c: Context) => {
+  // At this point, the apiKeyAuthMiddleware has already validated:
+  // 1. API key exists and matches hash
+  // 2. API key is not revoked
+  // 3. API key is not deleted  
+  // 4. User is not deleted
+  // 5. Context has userUuid and apiKeyUuid set
+  
+  const userUuid = c.get('userUuid')
+  const apiKeyUuid = c.get('apiKeyUuid')
+  
+  if (!userUuid || !apiKeyUuid) {
+    throw new HTTPException(500, { message: 'Internal error: missing context from middleware' })
+  }
+  
+  // Get full user information
+  const user = await userService.getUserByUuid(userUuid)
+  if (!user) {
+    throw new HTTPException(404, { message: 'User not found' })
+  }
+  
+  // Return verification result with user information (without internal ID)
+  return c.json({
+    valid: true,
+    user: userService.toPublicUser(user),
+    apiKeyUuid
+  })
 } 
