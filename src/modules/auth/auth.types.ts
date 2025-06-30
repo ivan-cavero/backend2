@@ -10,7 +10,7 @@ export interface GoogleUser {
 	family_name: string // Last name
 	picture?: string // URL to profile picture
 	locale?: string // User locale
-	hd?: string;
+	hd?: string
 }
 
 /**
@@ -18,31 +18,34 @@ export interface GoogleUser {
  */
 export interface JwtPayload {
 	/** Subject (user UUID, public identifier) */
-	sub: string;
+	sub: string
 	/** User email address */
-	email: string;
+	email: string
 	/** Issuer of the token */
-	iss?: string;
+	iss?: string
 	/** Token issued at timestamp */
-	iat: number;
+	iat: number
 	/** Token expires at timestamp */
-	exp: number;
+	exp: number
+	/** Allow additional string properties for Hono JWT compatibility */
+	[key: string]: string | number | undefined
 }
 
 /**
  * Represents a refresh token stored in the database.
  */
 export interface RefreshToken {
-	id: number;
-	uuid: string;
-	userId: number;
-	token: string;
-	userAgent?: string;
-	ipAddress?: string;
-	createdAt: Date;
-	expiresAt: Date;
-	revokedAt?: Date;
-	lastUsedAt?: Date;
+	id: number
+	uuid: string
+	userId: number
+	token: string
+	userAgent?: string
+	ipAddress?: string
+	createdAt: Date
+	expiresAt: Date
+	revokedAt?: Date
+	lastUsedAt?: Date
+	deletedAt?: Date
 }
 
 /**
@@ -50,27 +53,28 @@ export interface RefreshToken {
  */
 export interface RefreshTokenPayload {
 	/** User UUID (public identifier) */
-	userUuid: string;
+	userUuid: string
 	/** Internal user ID (for database queries) */
-	userId: number;
+	userId: number
 	/** Token issued at timestamp */
-	iat: number;
+	iat: number
 	/** Token expires at timestamp */
-	exp: number;
+	exp: number
 }
 
 /**
  * Database row interface for refresh token queries
  */
 export interface RefreshTokenDbRow {
-	id: number;
-	uuid: string;
-	user_id: number;
-	token: string;
-	user_agent?: string;
-	ip_address?: string;
-	created_at: Date;
-	expires_at: Date;
-	revoked_at?: Date;
-	last_used_at?: Date;
+	id: number
+	uuid: string
+	user_id: number
+	token: string
+	user_agent?: string
+	ip_address?: string
+	created_at: Date
+	expires_at: Date
+	revoked_at?: Date
+	last_used_at?: Date
+	deleted_at?: Date
 }

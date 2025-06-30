@@ -81,9 +81,9 @@ authRoutes.get(
 						status: 422,
 						issues: result.error.issues.map((issue) => ({
 							path: issue.path.join('.'),
-							message: issue.message,
-						})),
-					},
+							message: issue.message
+						}))
+					}
 				},
 				422
 			)
@@ -95,18 +95,34 @@ authRoutes.get(
 authRoutes.get(
 	'/logout',
 	describeRoute({
-		summary: 'User Logout',
-		description: 'Logs the user out by clearing the session cookie and redirecting to the frontend.',
+		summary: 'User Logout (Current Session)',
+		description:
+			'Logs the user out by revoking the current session and clearing authentication cookies. For multi-session management (close specific sessions or all sessions), use the dedicated session endpoints under /api/users/{uuid}/sessions.',
 		tags: ['Auth'],
 		responses: {
-			302: {
-				description: 'Redirects to the frontend login page after clearing the session.',
+			200: {
+				description: 'Logout successful - current session revoked and cookies cleared',
 				headers: {
-					Location: {
-						schema: { type: 'string', example: 'http://localhost:3000/login' }
-					},
 					'Set-Cookie': {
-						schema: { type: 'string', example: 'token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT' }
+						schema: {
+							type: 'array',
+							items: { type: 'string' },
+							example: [
+								'token=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0',
+								'refresh_token=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0'
+							]
+						}
+					}
+				},
+				content: {
+					'application/json': {
+						schema: {
+							type: 'object',
+							properties: {
+								ok: { type: 'boolean', example: true },
+								message: { type: 'string', example: 'Logged out successfully. Cookies cleared and session revoked.' }
+							}
+						}
 					}
 				}
 			}
@@ -119,7 +135,8 @@ authRoutes.post(
 	'/refresh',
 	describeRoute({
 		summary: 'Refresh access token using a valid refresh token cookie',
-		description: 'Issues a new access token and refresh token if the provided refresh token is valid. Returns both as httpOnly cookies.',
+		description:
+			'Issues a new access token and refresh token if the provided refresh token is valid. Returns both as httpOnly cookies.',
 		tags: ['Auth'],
 		responses: {
 			200: {

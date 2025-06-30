@@ -52,14 +52,14 @@ export async function issueAuthTokens(c: Context, user: User) {
 	})
 	setCookie(c, 'token', jwtToken, {
 		httpOnly: true,
-		secure: process.env.NODE_ENV === 'production',
+		secure: CONFIG.NODE_ENV === 'production',
 		sameSite: 'Lax',
 		path: '/',
 		maxAge: 15 * 60 // 15 min
 	})
 	setCookie(c, 'refresh_token', refreshToken.token, {
 		httpOnly: true,
-		secure: process.env.NODE_ENV === 'production',
+		secure: CONFIG.NODE_ENV === 'production',
 		sameSite: 'Lax',
 		path: '/',
 		maxAge: 30 * 24 * 60 * 60 // 30 días

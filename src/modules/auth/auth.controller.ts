@@ -6,7 +6,7 @@ import { logger } from '@/utils/logger'
 import { getGoogleOAuthUrl, getGoogleTokens, getGoogleUserProfile } from './providers/google'
 import { issueAuthTokens } from './auth.service'
 import { upsertUserFromOAuth } from '../user/user.service'
-import { findRefreshToken, revokeRefreshToken } from './refreshToken.service'
+import { findRefreshToken, revokeRefreshToken, updateRefreshTokenLastUsed } from './refreshToken.service'
 import { getUserByEmail, getUserById } from '../user/user.service'
 
 const JWT_COOKIE_NAME = 'token'
@@ -68,7 +68,7 @@ export const googleOAuthCallbackHandler = async (c: Context) => {
 			throw new HTTPException(500, { message: 'User not found or missing internal ID' })
 		}
 		await issueAuthTokens(c, user)
-		return c.redirect(CONFIG.FRONTEND_URL)
+		return c.redirect(`${CONFIG.FRONTEND_URL}/callback`)
 	} catch (error) {
 		// Errors are now caught by the global error handler.
 		// We just need to re-throw them if they are not already HTTPExceptions.
@@ -95,6 +95,8 @@ export const refreshTokenHandler = async (c: Context) => {
 	if (!user) {
 		throw new HTTPException(401, { message: 'User not found for refresh token' })
 	}
+	// Update last used timestamp before rotating
+	await updateRefreshTokenLastUsed(refreshToken)
 	// Rotate refresh token
 	await revokeRefreshToken(refreshToken)
 	await issueAuthTokens(c, user)
@@ -102,15 +104,30 @@ export const refreshTokenHandler = async (c: Context) => {
 }
 
 /**
- * Logs the user out by clearing the session cookie and redirecting to the frontend.
+ * Logs the user out by revoking the current session and clearing cookies.
+ * For multi-session management, use the dedicated session endpoints:
+ * - DELETE /api/users/{uuid}/sessions/{sessionId} (revoke specific session)
+ * - DELETE /api/users/{uuid}/sessions (revoke all sessions)
  */
 export const logoutHandler = async (c: Context) => {
-	// Revoke only the current refresh token
 	const refreshToken = getCookie(c, REFRESH_TOKEN_COOKIE)
+
 	if (refreshToken) {
-		await revokeRefreshToken(refreshToken)
+		try {
+			// Update last used timestamp before revoking
+			await updateRefreshTokenLastUsed(refreshToken)
+			// Revoke the current refresh token (session)
+			await revokeRefreshToken(refreshToken)
+			logger.info('User session revoked successfully during logout')
+		} catch (error) {
+			// Log error but continue with cookie clearing
+			logger.error('Error revoking refresh token during logout:', error)
+		}
+	} else {
+		logger.warn('Logout attempted without refresh token cookie')
 	}
-	// Clear cookies
+
+	// Clear both authentication cookies
 	setCookie(c, JWT_COOKIE_NAME, '', {
 		httpOnly: true,
 		secure: CONFIG.NODE_ENV === 'production',
@@ -125,5 +142,10 @@ export const logoutHandler = async (c: Context) => {
 		path: '/',
 		maxAge: 0
 	})
-	return c.json({ ok: true })
+
+	logger.info('User logout completed - cookies cleared')
+	return c.json({
+		ok: true,
+		message: 'Logged out successfully. Cookies cleared and session revoked.'
+	})
 }
