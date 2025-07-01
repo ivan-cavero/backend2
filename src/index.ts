@@ -13,6 +13,7 @@ import authRoutes from './modules/auth/auth.routes'
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler'
 import userRoutes from './modules/user/user.routes'
 import syncRoutes from './modules/sync/sync.routes'
+import standaloneApiKeyRoutes from './modules/api-keys/apiKey.routes'
 
 const app = new Hono()
 
@@ -58,6 +59,9 @@ app.route('/api/users', userRoutes)
 
 // Mount sync routes
 app.route('/api/sync', syncRoutes)
+
+// Mount standalone API key routes (no user UUID required)
+app.route('/api/api-keys', standaloneApiKeyRoutes)
 
 // Error handler
 app.onError(errorHandler)
@@ -115,6 +119,14 @@ app.get(
 				{
 					name: 'User',
 					description: 'User management endpoints: create, read, update, and soft delete users by UUID.'
+				},
+				{
+					name: 'User API Keys',
+					description: 'User-specific API key management: create, list, revoke, and verify API keys for authenticated users.'
+				},
+				{
+					name: 'API Keys',
+					description: 'Standalone API key operations that don\'t require user UUID. Perfect for IDE extensions and integrations.'
 				},
 				{
 					name: 'Activity Sync',
