@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { describeRoute } from 'hono-openapi'
 import { zValidator } from '@hono/zod-validator'
 import { googleOAuthHandler, googleOAuthCallbackHandler, logoutHandler, refreshTokenHandler } from './auth.controller'
+import { rateLimit } from '@/middlewares/rateLimit.middleware'
 import { GoogleCallbackQuerySchema } from './auth.schemas'
 import { ErrorSchema } from '@/schemas/error.schema'
 import { resolver } from 'hono-openapi/zod'
@@ -154,9 +155,23 @@ authRoutes.post(
 						schema: { type: 'object', properties: { ok: { type: 'boolean', example: false }, message: { type: 'string' } } }
 					}
 				}
-			}
+			},
+      429: {
+        description: 'Too many refresh attempts (rate limited)',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                message: { type: 'string', example: 'Too many requests – retry after 57 seconds' }
+              }
+            }
+          }
+        }
+      }
 		}
 	}),
+  rateLimit({ windowMs: 60 * 1000, max: 5 }),
 	refreshTokenHandler
 )
 

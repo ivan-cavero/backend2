@@ -3,61 +3,47 @@ import { HTTPException } from './errorHandler'
 import { verify } from 'hono/jwt'
 import { getCookie } from 'hono/cookie'
 import { CONFIG } from '@/config'
-import { findRefreshToken, updateRefreshTokenLastUsed } from '@/modules/auth/refreshToken.service'
-import { getUserById } from '@/modules/user/user.service'
 
 const ACCESS_TOKEN_COOKIE = 'token'
-const REFRESH_TOKEN_COOKIE = 'refresh_token'
 
 /**
- * Authentication middleware that verifies access tokens and validates refresh tokens
- * WITHOUT automatically rotating them. Token rotation should only happen in the
- * dedicated /refresh endpoint to maintain session stability.
+ * Authentication middleware – **access-token only**.
+ *
+ * Behaviour:
+ * 1. Reads JWT from the `token` cookie or an `Authorization: Bearer <jwt>` header.
+ * 2. Verifies signature & expiry with `hono/jwt`.
+ * 3. On success attaches `userUuid` (the JWT `sub`) to `c.var` so downstream
+ *    handlers can identify the user.
+ * 4. On failure (missing, expired or malformed token) immediately responds
+ *    with HTTP 401. The client must then call `POST /api/auth/refresh` using
+ *    its `refresh_token` cookie to obtain a new pair of tokens.
+ *
+ * NOTE: This middleware no longer falls back to refresh-token validation—front-
+ * end clients are responsible for explicit refresh calls. This simplifies the
+ * security model and makes session expiry predictable.
  */
 export const authMiddleware = async (c: Context, next: Next) => {
-	let accessToken = getCookie(c, ACCESS_TOKEN_COOKIE) || c.req.header('authorization')?.replace('Bearer ', '')
-	let userUuid: string | undefined
+	// 1. Attempt to retrieve the JWT from either the secure cookie or the Authorization header
+	const accessToken =
+		getCookie(c, ACCESS_TOKEN_COOKIE) || c.req.header('authorization')?.replace('Bearer ', '')
 
-	// Try to verify access token first
-	if (accessToken) {
+	// 2. Reject immediately if the token is missing
+	if (!accessToken) {
+		throw new HTTPException(401, { message: 'No access token provided' })
+	}
+
+	// 3. Verify and decode the JWT
 		try {
 			const payload = await verify(accessToken, CONFIG.JWT_SECRET)
-			if (typeof payload.sub === 'string') {
-				userUuid = payload.sub
-			}
-		} catch {
-			// Token invalid or expired, fall back to refresh token validation
-			accessToken = undefined
-		}
+		if (typeof payload.sub !== 'string') {
+			throw new Error('Invalid JWT payload – missing subject')
 	}
 
-	// If no valid access token, validate refresh token but DON'T rotate it
-	if (!userUuid) {
-		const refreshToken = getCookie(c, REFRESH_TOKEN_COOKIE)
-		if (refreshToken) {
-			const dbToken = await findRefreshToken(refreshToken)
-			if (dbToken && new Date(dbToken.expiresAt) > new Date() && !dbToken.revokedAt) {
-				// Get user by internal ID
-				const user = await getUserById(dbToken.userId)
-				if (!user) {
-					throw new HTTPException(401, { message: 'User not found for refresh token' })
-				}
-				userUuid = user.uuid
-
-				// Update last used timestamp (but don't rotate the token)
-				await updateRefreshTokenLastUsed(refreshToken)
-
-				// NOTE: We don't rotate the refresh token here to maintain session stability.
-				// The client should use the /refresh endpoint to get new tokens when needed.
-			} else {
-				throw new HTTPException(401, { message: 'Invalid or expired refresh token' })
-			}
-		} else {
-			throw new HTTPException(401, { message: 'No valid access or refresh token' })
+		// 4. Attach the user UUID to the context for downstream handlers
+		c.set('userUuid', payload.sub)
+		await next()
+	} catch (_err) {
+		// Token is expired or malformed
+		throw new HTTPException(401, { message: 'Invalid or expired access token' })
 		}
-	}
-
-	// Attach user UUID to context for downstream handlers
-	c.set('userUuid', userUuid)
-	await next()
 }

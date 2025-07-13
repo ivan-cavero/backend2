@@ -33,7 +33,8 @@ export const createUserApiKeyHandler = async (c: Context) => {
   const rawApiKey = Bun.randomUUIDv7() + Bun.hash(Bun.randomUUIDv7() + Date.now().toString()).toString(16)
   const hashedApiKey = await Bun.password.hash(rawApiKey, { algorithm: 'argon2id' })
   
-  const apiKeyPublic = await apiKeyService.createUserApiKey(uuid, hashedApiKey, label, description)
+  const caps = c.get('capabilities' as unknown as keyof typeof c.var) as { apiKeyLimit?: number } | undefined
+  const apiKeyPublic = await apiKeyService.createUserApiKey(uuid, caps?.apiKeyLimit, hashedApiKey, label, description)
   if (!apiKeyPublic) {
     return c.json({ ok: false, error: 'Failed to create API key' }, 400)
   }
@@ -72,7 +73,8 @@ export const regenerateUserApiKeyHandler = async (c: Context) => {
   const rawApiKey = Bun.randomUUIDv7() + Bun.hash(Bun.randomUUIDv7() + Date.now().toString()).toString(16)
   const hashedApiKey = await Bun.password.hash(rawApiKey, { algorithm: 'argon2id' })
   
-  const apiKeyPublic = await apiKeyService.createUserApiKey(uuid, hashedApiKey, oldKey.label, oldKey.description)
+  const caps = c.get('capabilities' as unknown as keyof typeof c.var) as { apiKeyLimit?: number } | undefined
+  const apiKeyPublic = await apiKeyService.createUserApiKey(uuid, caps?.apiKeyLimit, hashedApiKey, oldKey.label, oldKey.description)
   if (!apiKeyPublic) {
     return c.json({ ok: false, error: 'Failed to regenerate API key' }, 400)
   }

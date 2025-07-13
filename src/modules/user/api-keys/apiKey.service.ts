@@ -8,9 +8,8 @@
 import { postgresDb } from '@/db/postgresql'
 import type { UserApiKey, UserApiKeyPublic, ApiKeyDbRow } from './apiKey.types'
 
-// Maximum number of API keys per user (default: 1)
-export const MAX_API_KEYS_PER_USER = 1
-
+// Default maximum when plan not loaded
+const DEFAULT_MAX_API_KEYS_PER_USER = 1
 
 
 function mapDbApiKeyToUserApiKey(row: ApiKeyDbRow): UserApiKey {
@@ -113,7 +112,13 @@ export async function revokeAllUserApiKeys(userUuid: string): Promise<number> {
 /**
  * Create a new API key for a user, enforcing the maximum limit
  */
-export async function createUserApiKey(userUuid: string, hashedApiKey: string, label?: string, description?: string): Promise<UserApiKeyPublic | null> {
+export async function createUserApiKey(
+  userUuid: string,
+  maxKeysAllowed: number | undefined,
+  hashedApiKey: string,
+  label?: string,
+  description?: string
+): Promise<UserApiKeyPublic | null> {
   // Check if user exists
   const userRows = await postgresDb`
     SELECT id FROM users 
@@ -133,8 +138,10 @@ export async function createUserApiKey(userUuid: string, hashedApiKey: string, l
     WHERE user_id = ${userId} AND revoked_at IS NULL AND deleted_at IS NULL
   ` as Array<{ count: string }>
 
-  if (Number(countRows[0].count) >= MAX_API_KEYS_PER_USER) {
-    throw new Error(`Maximum of ${MAX_API_KEYS_PER_USER} API keys allowed per user`)
+  const limit = maxKeysAllowed ?? DEFAULT_MAX_API_KEYS_PER_USER
+
+  if (Number(countRows[0].count) >= limit) {
+    throw new Error(`Maximum of ${limit} API keys allowed for your plan`)
   }
 
   // Create new API key

@@ -63,7 +63,10 @@ export async function createRefreshToken({
 export async function findRefreshToken(token: string): Promise<RefreshToken | null> {
 	const rows = (await postgresDb`
     SELECT * FROM refresh_tokens 
-    WHERE token = ${token} AND revoked_at IS NULL AND deleted_at IS NULL
+    WHERE token = ${token}
+      AND revoked_at IS NULL
+      AND deleted_at IS NULL
+      AND expires_at > CURRENT_TIMESTAMP
   `) as RefreshTokenDbRow[]
 	if (!rows[0]) {
 		return null

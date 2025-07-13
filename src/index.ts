@@ -3,9 +3,12 @@ import { prettyJSON } from 'hono/pretty-json'
 import { logger as honoLogger } from 'hono/logger'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
+import { capabilityLoaderMiddleware } from '@/middlewares/capability.middleware'
+import { rateLimit } from '@/middlewares/rateLimit.middleware'
 import { openAPISpecs } from 'hono-openapi'
 import { Scalar } from '@scalar/hono-api-reference'
 import { serveStatic } from 'hono/bun'
+import { csrfMiddleware } from '@/middlewares/csrf.middleware'
 
 import { logger } from '@/utils/logger'
 import { CONFIG } from '@/config'
@@ -14,6 +17,8 @@ import { errorHandler, notFoundHandler } from './middlewares/errorHandler'
 import userRoutes from './modules/user/user.routes'
 import syncRoutes from './modules/sync/sync.routes'
 import standaloneApiKeyRoutes from './modules/api-keys/apiKey.routes'
+import rateLimitRoutes from './modules/rate-limit/rateLimit.routes'
+import pricingRoutes from './modules/pricing/pricing.routes'
 
 const app = new Hono()
 
@@ -25,6 +30,11 @@ app.use(
 		logger.info(message, ...rest) // Use our custom logger
 	})
 )
+
+// Carga de plan/capabilities (debe ir antes del limitador global)
+app.use('*', capabilityLoaderMiddleware)
+// Global rate limit – 100 requests per minute (customise as needed)
+app.use('*', rateLimit({ windowMs: 60 * 1000, max: 100 }))
 
 // CORS Configuration
 const defaultAllowedOrigins = ['http://localhost:3000']
@@ -47,9 +57,20 @@ app.use(
 		exposeHeaders: ['Content-Length']
 	})
 )
+
 app.use('*', secureHeaders())
+// Custom Content-Security-Policy header
+app.use('*', async (c, next) => {
+  c.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https: data:")
+  await next()
+})
+
+// CSRF protection
+app.use('*', csrfMiddleware)
 
 app.use('/favicon.svg', serveStatic({ path: './static/favicon.svg' }))
+// Serve .ico for browsers that expect it
+app.use('/favicon.ico', serveStatic({ path: './static/favicon.svg' }))
 
 // Mount authentication routes
 app.route('/api/auth', authRoutes);
@@ -62,6 +83,12 @@ app.route('/api/sync', syncRoutes)
 
 // Mount standalone API key routes (no user UUID required)
 app.route('/api/api-keys', standaloneApiKeyRoutes)
+
+// Rate-limit info route
+app.route('/api/rate-limit', rateLimitRoutes)
+
+// Pricing tiers
+app.route('/api/pricing', pricingRoutes)
 
 // Error handler
 app.onError(errorHandler)
@@ -86,6 +113,11 @@ app.get(
 					'**Authentication:**\n' +
 					'- Web users authenticate via secure cookie (token) after Google login.\n' +
 					'- IDE extensions and integrations authenticate using an API key via the X-API-Key header.\n\n' +
+					'**Rate-Limiting:**\n' +
+					'- Global quota: **100 requests per minute** per user/IP.\n' +
+					'- Sensitive endpoints (e.g., `/api/auth/refresh`) have stricter limits (5 req/min).\n' +
+					'- On exceeding the limit the API returns **HTTP 429** and sets `X-RateLimit-*` headers.\n' +
+					'- Check your current quota with **GET /api/rate-limit**.\n\n' +
 					'**Key Features:**\n' +
 					'- Direct integration with VS Code via extension\n' +
 					'- Real-time activity tracking and synchronization\n' +
@@ -109,6 +141,26 @@ app.get(
 						name: 'X-API-Key',
 						description: 'Use X-API-Key: <api_key> for IDE extensions and integrations'
 					}
+				},
+				responses: {
+					TooManyRequests: {
+						description: 'Too many requests – client is rate limited',
+						headers: {
+							'X-RateLimit-Limit': { schema: { type: 'string' }, description: 'Total requests allowed in the current window' },
+							'X-RateLimit-Remaining': { schema: { type: 'string' }, description: 'Requests remaining in the current window' },
+							'X-RateLimit-Reset': { schema: { type: 'string' }, description: 'Unix timestamp (seconds) when the window resets' }
+						},
+						content: {
+							'application/json': {
+								schema: {
+									type: 'object',
+									properties: {
+										message: { type: 'string', example: 'Too many requests – retry after 57 seconds' }
+									}
+								}
+							}
+						}
+					}
 				}
 			},
 			tags: [
@@ -131,6 +183,14 @@ app.get(
 				{
 					name: 'Activity Sync',
 					description: 'Core endpoints for synchronizing developer activity data from IDE extensions. Handles high-volume time-series data storage in ClickHouse.'
+				},
+				{
+					name: 'Rate Limit',
+					description: 'Endpoints and policy related to API rate limiting.'
+				},
+				{
+					name: 'Pricing',
+					description: 'Endpoints to query available pricing tiers and their quotas.'
 				}
 			]
 		}
@@ -145,7 +205,6 @@ app.get(
 		theme: 'default',
 		pageTitle: 'TimeFly API • Docs',
 		favicon: '/favicon.svg',
-		hideDownloadButton: true,
 		metaData: {
 			title: 'TimeFly API • Docs',
 			description: 'API for TimeFly',

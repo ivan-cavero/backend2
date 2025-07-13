@@ -44,9 +44,8 @@ CREATE UNIQUE INDEX unique_roles_name_not_deleted
 -- Insert initial roles
 INSERT INTO roles (name, display_name, description, is_default) VALUES
     ('user', 'User', 'Standard user with basic permissions', TRUE),
-    ('admin', 'Administrator', 'Full system access and user management', FALSE),
-    ('manager', 'Manager', 'Management access with limited admin privileges', FALSE),
-    ('moderator', 'Moderator', 'Content moderation and user support privileges', FALSE);
+    ('paid_user', 'Paid User', 'Paid user with access to all features', FALSE),
+    ('admin', 'Administrator', 'Full system access and user management', FALSE);
 
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
