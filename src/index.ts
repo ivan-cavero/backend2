@@ -55,7 +55,7 @@ app.use(
 		},
 		credentials: true,
 		allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-		allowHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-API-Key'],
+		allowHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-API-Key', 'X-CSRF-Token'],
 		exposeHeaders: ['Content-Length']
 	})
 )
