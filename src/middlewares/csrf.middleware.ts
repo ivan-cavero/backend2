@@ -25,6 +25,7 @@ export const csrfMiddleware = async (c: Context, next: Next) => {
       httpOnly: false, // must be readable by JS to echo back in header
       secure: CONFIG.NODE_ENV === 'production',
       sameSite: 'Lax',
+      domain: CONFIG.NODE_ENV === 'production' ? '.timefly.dev' : undefined,
       path: '/'
     })
   }
