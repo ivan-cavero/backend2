@@ -230,11 +230,14 @@ app.get(
 let llmsMarkdown: string | undefined
 
 app.get('/llms.txt', async (c) => {
-  if (!llmsMarkdown) {
-    const res = await fetch(`${CONFIG.BASE_URL}:${CONFIG.PORT}/openapi`)
-    const json = await res.text()
-    llmsMarkdown = await createMarkdownFromOpenApi(json)
+  let res: Response
+  try {
+    res = await fetch(`http://127.0.0.1:${CONFIG.PORT}/openapi`)
+  } catch (_err) {
+    res = await fetch('/openapi')
   }
+  const json = await res.text()
+  llmsMarkdown = await createMarkdownFromOpenApi(json)
   return c.text(llmsMarkdown as string)
 })
 
