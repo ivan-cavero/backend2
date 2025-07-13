@@ -9,6 +9,8 @@ import { openAPISpecs } from 'hono-openapi'
 import { Scalar } from '@scalar/hono-api-reference'
 import { serveStatic } from 'hono/bun'
 import { csrfMiddleware } from '@/middlewares/csrf.middleware'
+// @ts-ignore - No types published for this helper
+import { createMarkdownFromOpenApi } from '@scalar/openapi-to-markdown'
 
 import { logger } from '@/utils/logger'
 import { CONFIG } from '@/config'
@@ -104,6 +106,7 @@ app.get(
 	'/openapi',
 	openAPISpecs(app, {
 		documentation: {
+			openapi: '3.0.3',
 			info: {
 				title: 'TimeFly API',
 				version: '1.0.0',
@@ -202,9 +205,10 @@ app.get(
 	'/',
 	Scalar({
 		url: '/openapi',
-		theme: 'default',
+		customCss: 'body { background-color: #1f1f1f}',
 		pageTitle: 'TimeFly API • Docs',
 		favicon: '/favicon.svg',
+		hideDownloadButton: false,
 		metaData: {
 			title: 'TimeFly API • Docs',
 			description: 'API for TimeFly',
@@ -221,6 +225,18 @@ app.get(
 		}
 	})
 )
+
+// LLMs markdown of API
+let llmsMarkdown: string | undefined
+
+app.get('/llms.txt', async (c) => {
+  if (!llmsMarkdown) {
+    const res = await fetch(`${CONFIG.BASE_URL}:${CONFIG.PORT}/openapi`)
+    const json = await res.text()
+    llmsMarkdown = await createMarkdownFromOpenApi(json)
+  }
+  return c.text(llmsMarkdown as string)
+})
 
 // Temporary debug endpoint (REMOVE IN PRODUCTION LATER)
 app.get('/debug/config', (c) => {

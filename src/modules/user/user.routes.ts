@@ -105,7 +105,7 @@ userRoutes.post(
     summary: 'Create a new user',
     description: 'Creates a new user in the system. Used for registration or admin user creation.',
     requestBody: {
-      content: { 'application/json': { schema: { $ref: '#/components/schemas/UserCreate' } } }
+      content: { 'application/json': { schema: resolver(UserCreateSchema) as unknown as object } }
     },
     responses: {
       201: {
@@ -138,7 +138,7 @@ userRoutes.put(
       }
     ],
     requestBody: {
-      content: { 'application/json': { schema: { $ref: '#/components/schemas/UserUpdate' } } }
+      content: { 'application/json': { schema: resolver(UserUpdateSchema) as unknown as object } }
     },
     responses: {
       200: {

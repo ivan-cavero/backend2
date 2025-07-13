@@ -206,8 +206,8 @@ apiKeyRoutes.post(
         required: true,
         schema: { 
           type: 'string', 
-          example: 'tfk_S25nIOfC_Tle6S3eE-23y5sftwzPj4aF',
-          pattern: '^tfk\\w{32,}$',
+          example: 'tfk_abcdefghijklmnopqrstuvwxyz123456',
+          pattern: '^tfk[\\w-]{32,}$',
           description: 'The API key to verify. It must start with the prefix `tfk_`.'
         },
         description: 'The API key to verify. This is the same format used by IDE extensions and integrations.'

@@ -8,8 +8,8 @@ export const ApiKeyPublicSchema = z.object({
   description: z.string().optional().openapi({ example: 'Key for syncing with my app', description: 'Description of the API key usage' }),
   createdAt: z.date().openapi({ example: new Date(), description: 'API key creation timestamp' }),
   lastUsedAt: z.date().openapi({ example: new Date(), description: 'Last used timestamp' }),
-  revokedAt: z.date().nullable().optional().openapi({ example: null, description: 'Revocation timestamp' }),
-  deletedAt: z.date().nullable().optional().openapi({ example: null, description: 'Soft delete timestamp' })
+  revokedAt: z.date().openapi({ nullable: true, example: new Date(), description: 'Revocation timestamp' }).optional(),
+  deletedAt: z.date().openapi({ nullable: true, example: new Date(), description: 'Soft delete timestamp' }).optional()
 }).openapi({ ref: 'ApiKey', description: 'User API key object (public)' })
 
 /**
