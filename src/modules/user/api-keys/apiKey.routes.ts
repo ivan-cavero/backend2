@@ -83,7 +83,11 @@ apiKeyRoutes.post(
             schema: {
               type: 'object',
               properties: {
-                apiKey: { type: 'string', example: 'b3b3b3b3-b3b3-4b3b-b3b3-b3b3b3b3b3b3e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4' },
+                apiKey: { 
+                  type: 'string', 
+                  example: 'tfk_S25nIOfC_Tle6S3eE-23y5sftwzPj4aF',
+                  description: 'The newly generated API key. It starts with the prefix `tfk_`. This is the only time the key is shown in plaintext.'
+                },
                 apiKeyPublic: { $ref: '#/components/schemas/ApiKey' }
               }
             }
@@ -146,7 +150,11 @@ apiKeyRoutes.post(
             schema: {
               type: 'object',
               properties: {
-                apiKey: { type: 'string', example: 'b3b3b3b3-b3b3-4b3b-b3b3-b3b3b3b3b3b3e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4' },
+                apiKey: { 
+                  type: 'string', 
+                  example: 'tfk_S25nIOfC_Tle6S3eE-23y5sftwzPj4aF',
+                  description: 'The newly generated API key. It starts with the prefix `tfk_`. This is the only time the key is shown in plaintext.'
+                },
                 apiKeyPublic: { $ref: '#/components/schemas/ApiKey' }
               }
             }
@@ -196,7 +204,12 @@ apiKeyRoutes.post(
         in: 'header',
         name: 'X-API-Key',
         required: true,
-        schema: { type: 'string', example: 'b3b3b3b3-b3b3-4b3b-b3b3-b3b3b3b3b3b3e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4e4' },
+        schema: { 
+          type: 'string', 
+          example: 'tfk_S25nIOfC_Tle6S3eE-23y5sftwzPj4aF',
+          pattern: '^tfk\\w{32,}$',
+          description: 'The API key to verify. It must start with the prefix `tfk_`.'
+        },
         description: 'The API key to verify. This is the same format used by IDE extensions and integrations.'
       }
     ],

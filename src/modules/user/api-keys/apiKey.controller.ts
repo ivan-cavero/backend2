@@ -2,6 +2,7 @@ import type { Context } from 'hono'
 import * as apiKeyService from './apiKey.service'
 import * as userService from '../user.service'
 import { HTTPException } from '@/middlewares/errorHandler'
+import { generateApiKey, hashApiKey } from '@/utils/apiKey'
 
 export const listUserApiKeysHandler = async (c: Context) => {
   const uuid = c.req.param('uuid')
@@ -30,8 +31,8 @@ export const createUserApiKeyHandler = async (c: Context) => {
   const { label, description } = await c.req.json().catch(() => ({}))
   
   // Generate API key and hash it
-  const rawApiKey = Bun.randomUUIDv7() + Bun.hash(Bun.randomUUIDv7() + Date.now().toString()).toString(16)
-  const hashedApiKey = await Bun.password.hash(rawApiKey, { algorithm: 'argon2id' })
+  const rawApiKey = generateApiKey()
+  const hashedApiKey = await hashApiKey(rawApiKey)
   
   const caps = c.get('capabilities' as unknown as keyof typeof c.var) as { apiKeyLimit?: number } | undefined
   const apiKeyPublic = await apiKeyService.createUserApiKey(uuid, caps?.apiKeyLimit, hashedApiKey, label, description)
@@ -70,8 +71,8 @@ export const regenerateUserApiKeyHandler = async (c: Context) => {
   await apiKeyService.revokeUserApiKey(uuid, keyUuid)
   
   // Generate new API key and hash it
-  const rawApiKey = Bun.randomUUIDv7() + Bun.hash(Bun.randomUUIDv7() + Date.now().toString()).toString(16)
-  const hashedApiKey = await Bun.password.hash(rawApiKey, { algorithm: 'argon2id' })
+  const rawApiKey = generateApiKey()
+  const hashedApiKey = await hashApiKey(rawApiKey)
   
   const caps = c.get('capabilities' as unknown as keyof typeof c.var) as { apiKeyLimit?: number } | undefined
   const apiKeyPublic = await apiKeyService.createUserApiKey(uuid, caps?.apiKeyLimit, hashedApiKey, oldKey.label, oldKey.description)
