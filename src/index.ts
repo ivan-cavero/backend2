@@ -2,7 +2,6 @@ import { Hono } from 'hono'
 import { prettyJSON } from 'hono/pretty-json'
 import { logger as honoLogger } from 'hono/logger'
 import { cors } from 'hono/cors'
-import { secureHeaders } from 'hono/secure-headers'
 import { capabilityLoaderMiddleware } from '@/middlewares/capability.middleware'
 import { rateLimit } from '@/middlewares/rateLimit.middleware'
 import { openAPISpecs } from 'hono-openapi'
@@ -11,6 +10,7 @@ import { serveStatic } from 'hono/bun'
 import { csrfMiddleware } from '@/middlewares/csrf.middleware'
 // @ts-ignore - No types published for this helper
 import { createMarkdownFromOpenApi } from '@scalar/openapi-to-markdown'
+import { securityHeadersMiddleware } from '@/middlewares/securityHeaders.middleware'
 
 import { logger } from '@/utils/logger'
 import { CONFIG } from '@/config'
@@ -60,12 +60,7 @@ app.use(
 	})
 )
 
-app.use('*', secureHeaders())
-// Custom Content-Security-Policy header
-app.use('*', async (c, next) => {
-  c.header('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https: data:")
-  await next()
-})
+app.use('*', securityHeadersMiddleware)
 
 // CSRF protection
 app.use('*', csrfMiddleware)
@@ -256,6 +251,8 @@ app.get('/debug/config', (c) => {
 })
 
 logger.info(`API Documentation available at ${CONFIG.BASE_URL}:${CONFIG.PORT}`)
+
+export const appInstance = app
 
 export default {
 	port: CONFIG.PORT,
