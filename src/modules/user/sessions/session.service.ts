@@ -88,8 +88,9 @@ export async function revokeUserSession(userUuid: string, sessionId: string): Pr
     AND s.uuid = ${sessionId} 
     AND s.revoked_at IS NULL 
     AND s.deleted_at IS NULL
-  `
-  return result.count > 0
+    RETURNING s.id
+  ` as Array<{ id: number }>
+  return result.length > 0
 }
 
 /**
@@ -104,6 +105,7 @@ export async function revokeAllUserSessions(userUuid: string): Promise<number> {
     AND u.uuid = ${userUuid} 
     AND s.revoked_at IS NULL 
     AND s.deleted_at IS NULL
-  `
-  return result.count
+    RETURNING s.id
+  ` as Array<{ id: number }>
+  return result.length
 } 

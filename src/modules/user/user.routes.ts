@@ -15,11 +15,15 @@ import { authMiddleware } from '@/middlewares/auth.middleware'
 import * as userService from './user.service'
 import sessionRoutes from './sessions/session.routes'
 import apiKeyRoutes from './api-keys/apiKey.routes'
+import { ownershipMiddleware } from '@/middlewares/ownership.middleware'
 
 const userRoutes = new Hono()
 
 // Apply authentication middleware to all user routes
 userRoutes.use('*', authMiddleware)
+// Replace generic middleware paths with UUID pattern-restricted paths
+userRoutes.use('/:uuid{[0-9a-fA-F-]{36}}', ownershipMiddleware)
+userRoutes.use('/:uuid{[0-9a-fA-F-]{36}}/*', ownershipMiddleware)
 
 userRoutes.get(
   '/me',
