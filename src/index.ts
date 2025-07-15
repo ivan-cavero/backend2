@@ -189,6 +189,10 @@ app.get(
 				{
 					name: 'Pricing',
 					description: 'Endpoints to query available pricing tiers and their quotas.'
+				},
+				{
+					name: 'Data Events',
+					description: 'Endpoints to import/export user data and monitor background jobs.'
 				}
 			]
 		}

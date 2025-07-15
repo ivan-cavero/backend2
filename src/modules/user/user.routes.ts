@@ -15,6 +15,7 @@ import { authMiddleware } from '@/middlewares/auth.middleware'
 import * as userService from './user.service'
 import sessionRoutes from './sessions/session.routes'
 import apiKeyRoutes from './api-keys/apiKey.routes'
+import dataEventsRoutes from './data-events/dataEvent.routes'
 import { ownershipMiddleware } from '@/middlewares/ownership.middleware'
 
 const userRoutes = new Hono()
@@ -194,5 +195,6 @@ userRoutes.delete(
 
 userRoutes.route('/:uuid/sessions', sessionRoutes)
 userRoutes.route('/:uuid/api-keys', apiKeyRoutes)
+userRoutes.route('/:uuid/data-events', dataEventsRoutes)
 
 export default userRoutes 
