@@ -16,6 +16,18 @@ export const csrfMiddleware = async (c: Context, next: Next) => {
   const method = c.req.method.toUpperCase()
   const safe = method === 'GET' || method === 'HEAD' || method === 'OPTIONS'
 
+  // Skip CSRF validation for specific non-browser endpoints (e.g. IDE integrations)
+  // These endpoints are designed to be called programmatically where CSRF is not a threat
+  const path = c.req.path
+  const csrfExemptRoutes: Array<{ method: string; path: string }> = [
+    { method: 'POST', path: '/api/api-keys/verify' }
+  ]
+
+  if (csrfExemptRoutes.some((r) => r.method === method && r.path === path)) {
+    await next()
+    return
+  }
+
   let token = getCookie(c, CSRF_COOKIE)
 
   // Issue token if missing (on safe requests)
