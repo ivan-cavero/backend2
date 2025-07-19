@@ -1,8 +1,7 @@
 import { Hono } from 'hono'
 import { describeRoute } from 'hono-openapi'
 import { zValidator } from '@hono/zod-validator'
-import { resolver } from 'hono-openapi/zod'
-import { syncEventsHandler, syncMeHandler } from './sync.controller'
+import { syncEventsHandler } from './sync.controller'
 import { SyncValidationSchema } from './sync.schemas'
 import { apiKeyAuthMiddleware } from '@/middlewares/apiKey.middleware'
 
@@ -96,8 +95,5 @@ syncRoutes.post(
   zValidator('json', SyncValidationSchema),
   syncEventsHandler,
 )
-
-// Info endpoint
-syncRoutes.get('/me', apiKeyAuthMiddleware, syncMeHandler)
 
 export default syncRoutes 
